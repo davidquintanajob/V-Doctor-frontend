@@ -1,7 +1,9 @@
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View, TouchableOpacity, Alert } from 'react-native';
 import { Audio } from 'expo-av';
 import { useState } from 'react';
+import TopBar from './components/TopBar';
 
 export default function App() {
   const [sound, setSound] = useState(null);
@@ -9,8 +11,6 @@ export default function App() {
   const playSound = async () => {
     try {
       console.log('Cargando sonido...');
-      
-      // Configurar el modo de audio
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
         playsInSilentModeIOS: true,
@@ -18,31 +18,26 @@ export default function App() {
         playThroughEarpieceAndroid: false,
       });
 
-      // Cargar el sonido desde tu archivo local
       const { sound: soundObject } = await Audio.Sound.createAsync(
         require('./assets/sounds/beep.mp3')
       );
 
       setSound(soundObject);
-      
       console.log('Reproduciendo sonido...');
       await soundObject.playAsync();
-      
-      // Limpiar el sonido cuando termine de reproducirse
+
       soundObject.setOnPlaybackStatusUpdate((playbackStatus) => {
         if (playbackStatus.didJustFinish) {
           soundObject.unloadAsync();
           setSound(null);
         }
       });
-      
     } catch (error) {
       console.error('Error al reproducir el sonido:', error);
       Alert.alert('Error', 'No se pudo reproducir el sonido');
     }
   };
 
-  // Función para detener el sonido si es necesario
   const stopSound = async () => {
     if (sound) {
       await sound.stopAsync();
@@ -51,28 +46,24 @@ export default function App() {
     }
   };
 
+  const handleMenuNavigate = (link) => {
+    console.log('Navegando a:', link);
+    Alert.alert('Navegación', `Irías a la vista: ${link}`);
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>¡V-Doctor App!</Text>
-      <Text style={styles.subtitle}>Presiona para reproducir el sonido</Text>
-      
-      {/* Botón para reproducir sonido */}
-      <TouchableOpacity 
-        style={styles.button}
-        onPress={playSound}
-      >
-        <Text style={styles.buttonText}>🔊 Reproducir Beep</Text>
-      </TouchableOpacity>
+      <TopBar onMenuNavigate={handleMenuNavigate} />
+      <View style={styles.content}>
+        <Text style={styles.title}>¡V-Doctor App!</Text>
+        <Text style={styles.subtitle}>Presiona para reproducir el sonido</Text>
 
-      {/* Botón opcional para detener el sonido */}
-      {sound && (
-        <TouchableOpacity 
-          style={[styles.button, styles.stopButton]}
-          onPress={stopSound}
-        >
-          <Text style={styles.buttonText}>⏹️ Detener Sonido</Text>
-        </TouchableOpacity>
-      )}
+        {sound && (
+          <TouchableOpacity style={[styles.button, styles.stopButton]} onPress={stopSound}>
+            <Text style={styles.buttonText}>⏹️ Detener Sonido</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <StatusBar style="auto" />
     </View>
@@ -83,6 +74,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    padding: 0,
+  },
+  content: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
