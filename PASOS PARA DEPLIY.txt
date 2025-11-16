@@ -1,0 +1,34 @@
+# 1) Instala dependencias del proyecto
+yarn install
+
+# 2) (Opcional) Instala EAS CLI globalmente para comodidad (puedes usar npx si prefieres)
+npm install -g eas-cli
+
+# 3) Inicia sesión en Expo/EAS (te pedirá credenciales)
+npx eas login
+
+# 4) (Opcional pero recomendado) Validar proyecto y generar native project si quieres inspeccionar nativo:
+yarn prebuild
+# o, sin script:
+npx expo prebuild
+
+# 5) Ejecutar build para Android (usa el script que añadí):
+yarn eas:build:android
+# equivalente directo:
+# npx eas build --platform android --profile production
+
+/*
+npx eas build --platform android
+*/
+
+# 6) Ejecutar build para iOS (requiere cuenta Apple y credenciales):
+yarn eas:build:ios
+# equivalente directo:
+# npx eas build --platform ios --profile production
+
+# 7) (Opcional) Subir el APK/AAB / IPA automáticamente a tienda (debes configurar credenciales):
+yarn eas:submit:android
+yarn eas:submit:ios
+# equivalentes directos:
+# npx eas submit --platform android --latest --profile production
+# npx eas submit --platform ios --latest --profile production
