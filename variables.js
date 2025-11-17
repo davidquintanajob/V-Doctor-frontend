@@ -5,7 +5,7 @@
 export const Colors = {
   // Paleta principal
   primary: '#358001',
-  primaryDark: '#2b6300',
+  primaryDark: '#4CAF50',
   primarySuave: '#a5d6a7',
   primaryClaro: "#deffdf",
   secondary: '#FFFFFF',
