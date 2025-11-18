@@ -18,6 +18,8 @@
       "buildNumber": "1"
     },
     "android": {
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": "res/xml/network_security_config.xml",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

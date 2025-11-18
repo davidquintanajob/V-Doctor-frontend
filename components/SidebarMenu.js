@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   TouchableOpacity,
@@ -10,27 +10,81 @@ import {
   ScrollView,
 } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 const MENU_WIDTH = width * 0.75;
 
 const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
-  // Definir los items directamente aquí según indicación
+  const router = useRouter();
+  const [filteredMenuItems, setFilteredMenuItems] = useState([]);
+  const [userRole, setUserRole] = useState(null);
+
+  // Definir los items con roles visibles
   const menuItems = [
-    { name: 'Tareas', icon: require('../assets/images/customers.png'), link: 'clientes' },
-    { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes' },
-    { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'appointments' },
-    { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'pets' },
-    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'history' },
-    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'settings' },
-    { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'settings' },
-    { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'settings' },
-    { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'settings' },
-    { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'settings' },
-    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'settings' },
+    { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicios', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'calendario', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'ventas', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'estetica', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'inventario', rolVisible: ["Administrador", "Médico", "Técnico"] },
+    { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
+    { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'informes', rolVisible: ['Administrador'] },
+    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'cambio-moneda', rolVisible: ['Administrador'] },
+    { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
   ];
 
   const slideAnim = React.useRef(new Animated.Value(-MENU_WIDTH)).current;
+
+  // Cargar datos del usuario y filtrar menú
+  useEffect(() => {
+    const loadUserDataAndFilterMenu = async () => {
+      try {
+        const configString = await AsyncStorage.getItem('@config');
+        if (configString) {
+          const config = JSON.parse(configString);
+          
+          // Verificar si hay token
+          if (!config.token) {
+            // No hay token, redirigir a login
+            router.replace('/login');
+            onClose();
+            return;
+          }
+
+          // Obtener rol del usuario
+          const userRoleFromConfig = config.usuario?.rol;
+          setUserRole(userRoleFromConfig);
+
+          // Filtrar menú según el rol
+          if (userRoleFromConfig) {
+            const filtered = menuItems.filter(item => 
+              item.rolVisible.includes(userRoleFromConfig)
+            );
+            setFilteredMenuItems(filtered);
+          } else {
+            // Si no hay rol, mostrar todos los items
+            setFilteredMenuItems(menuItems);
+          }
+        } else {
+          // No hay configuración, redirigir a login
+          router.replace('/login');
+          onClose();
+        }
+      } catch (error) {
+        console.log('Error cargando datos del usuario:', error);
+        // En caso de error, mostrar todos los items
+        setFilteredMenuItems(menuItems);
+      }
+    };
+
+    if (isOpen) {
+      loadUserDataAndFilterMenu();
+    }
+  }, [isOpen]);
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
@@ -40,9 +94,33 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     }).start();
   }, [isOpen]);
 
-  const handleItemPress = (link) => {
-    onNavigate(link);
-    onClose();
+  const handleItemPress = async (link) => {
+    try {
+      // Verificar token antes de navegar
+      const configString = await AsyncStorage.getItem('@config');
+      if (configString) {
+        const config = JSON.parse(configString);
+        
+        if (!config.token) {
+          // No hay token, redirigir a login
+          router.replace('/login');
+          onClose();
+          return;
+        }
+
+        // Hay token, navegar normalmente
+        router.push(`/${link}`);
+        onClose();
+      } else {
+        // No hay configuración, redirigir a login
+        router.replace('/login');
+        onClose();
+      }
+    } catch (error) {
+      console.log('Error verificando token:', error);
+      router.replace('/login');
+      onClose();
+    }
   };
 
   return (
@@ -65,9 +143,15 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
           },
         ]}
       >
+        {/* Información del usuario */}
+        <View style={styles.userInfo}>
+          <Text style={styles.userName}>
+            {userRole ? `Rol: ${userRole}` : 'Usuario no identificado'}
+          </Text>
+        </View>
 
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-          {menuItems.map((item, index) => (
+          {filteredMenuItems.map((item, index) => (
             <TouchableOpacity
               key={index}
               style={[styles.menuItem, { borderWidth: 2, borderColor: Colors.primary, backgroundColor: Colors.primarySuave }]}
@@ -81,6 +165,15 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
               <Text style={styles.itemText}>{item.name}</Text>
             </TouchableOpacity>
           ))}
+          
+          {/* Mostrar mensaje si no hay items visibles */}
+          {filteredMenuItems.length === 0 && (
+            <View style={styles.noItemsContainer}>
+              <Text style={styles.noItemsText}>
+                No tienes permisos para ver ningún menú
+              </Text>
+            </View>
+          )}
         </ScrollView>
       </Animated.View>
     </>
@@ -112,16 +205,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.m,
     marginTop: 15
   },
-  logoWrap: {
-    width: '100%',
-    alignItems: 'flex-start',
+  userInfo: {
     paddingHorizontal: Spacing.m,
-    paddingBottom: Spacing.s,
+    paddingVertical: Spacing.s,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.primary,
+    marginBottom: Spacing.s,
   },
-  sidebarLogo: {
-    width: 100,
-    height: 50,
-    marginTop: 15,
+  userName: {
+    fontSize: Typography.small,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   menuItem: {
     flexDirection: 'row',
@@ -141,6 +236,17 @@ const styles = StyleSheet.create({
     fontSize: Typography.body,
     color: Colors.textSecondary,
     fontWeight: '500',
+  },
+  noItemsContainer: {
+    padding: Spacing.m,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noItemsText: {
+    fontSize: Typography.body,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });
 
