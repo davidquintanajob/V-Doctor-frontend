@@ -3,10 +3,12 @@ import { View, Image, TouchableOpacity, StyleSheet, Platform, Text } from 'react
 import { Colors, Spacing, Typography } from '../variables';
 import SidebarMenu from './SidebarMenu';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 
-const TopBar = ({ onMenuNavigate = () => {}, onLogoPress = () => {} }) => {
+const TopBar = ({ onMenuNavigate = () => { }, onLogoPress = () => { } }) => {
     const [menuOpen, setMenuOpen] = useState(false);
     const [isUserActive, setIsUserActive] = useState(false);
+    const router = useRouter();
 
     // Verificar estado del usuario al cargar el componente
     useEffect(() => {
@@ -51,8 +53,8 @@ const TopBar = ({ onMenuNavigate = () => {}, onLogoPress = () => {} }) => {
                 </View>
 
                 <View style={styles.right}>
-                    <TouchableOpacity 
-                        style={styles.iconButton} 
+                    <TouchableOpacity
+                        style={styles.iconButton}
                         onPress={() => setMenuOpen(!menuOpen)}
                     >
                         <Image
@@ -62,7 +64,9 @@ const TopBar = ({ onMenuNavigate = () => {}, onLogoPress = () => {} }) => {
                         />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={[styles.iconButton, styles.userButton]} onPress={() => { }}>
+                    <TouchableOpacity
+                        style={[styles.iconButton, styles.userButton]} onPress={() => { router.push('/perfil'); }}
+                    >
                         <View style={styles.userButtonContainer}>
                             <Image
                                 source={require('../assets/images/user.png')}
@@ -83,7 +87,7 @@ const TopBar = ({ onMenuNavigate = () => {}, onLogoPress = () => {} }) => {
                 </View>
             </View>
 
-            <SidebarMenu 
+            <SidebarMenu
                 isOpen={menuOpen}
                 onClose={() => setMenuOpen(false)}
                 onNavigate={onMenuNavigate}
