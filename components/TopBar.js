@@ -39,7 +39,7 @@ const TopBar = ({ onMenuNavigate = () => { }, onLogoPress = () => { } }) => {
         <>
             <View style={styles.container}>
                 <View style={styles.left}>
-                    <TouchableOpacity onPress={() => onLogoPress()} activeOpacity={0.7}>
+                    <TouchableOpacity onPress={() => {router.replace('/');}} activeOpacity={0.7}>
                         <Image
                             source={require('../assets/images/logo(con_borde_blanco).png')}
                             style={styles.logo}

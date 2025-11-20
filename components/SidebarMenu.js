@@ -20,6 +20,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
   const router = useRouter();
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [userRole, setUserRole] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   // Definir los items con roles visibles
   const menuItems = [
@@ -33,8 +34,8 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'inventario', rolVisible: ["Administrador", "Médico", "Técnico"] },
     { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
     { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'informes', rolVisible: ['Administrador'] },
-    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'cambio-moneda', rolVisible: ['Administrador'] },
-    { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'config', rolVisible: ['Administrador'] },
+    { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true }, // Nueva propiedad
   ];
 
   const slideAnim = React.useRef(new Animated.Value(-MENU_WIDTH)).current;
@@ -44,39 +45,45 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     const loadUserDataAndFilterMenu = async () => {
       try {
         const configString = await AsyncStorage.getItem('@config');
+        
         if (configString) {
           const config = JSON.parse(configString);
           
-          // Verificar si hay token
-          if (!config.token) {
-            // No hay token, redirigir a login
-            router.replace('/login');
-            onClose();
-            return;
-          }
+          // Verificar si hay token para determinar si está logueado
+          if (config.token) {
+            setIsLoggedIn(true);
+            
+            // Obtener rol del usuario si existe
+            const userRoleFromConfig = config.usuario?.rol;
+            setUserRole(userRoleFromConfig);
 
-          // Obtener rol del usuario
-          const userRoleFromConfig = config.usuario?.rol;
-          setUserRole(userRoleFromConfig);
-
-          // Filtrar menú según el rol
-          if (userRoleFromConfig) {
-            const filtered = menuItems.filter(item => 
-              item.rolVisible.includes(userRoleFromConfig)
-            );
-            setFilteredMenuItems(filtered);
+            // Filtrar menú según el rol
+            if (userRoleFromConfig) {
+              const filtered = menuItems.filter(item => 
+                item.rolVisible.includes(userRoleFromConfig)
+              );
+              setFilteredMenuItems(filtered);
+            } else {
+              // Si hay token pero no hay rol, mostrar todos los items
+              setFilteredMenuItems(menuItems);
+            }
           } else {
-            // Si no hay rol, mostrar todos los items
+            // No hay token, usuario no logueado - mostrar todos los items
+            setIsLoggedIn(false);
+            setUserRole(null);
             setFilteredMenuItems(menuItems);
           }
         } else {
-          // No hay configuración, redirigir a login
-          router.replace('/login');
-          onClose();
+          // No hay configuración, usuario no logueado - mostrar todos los items
+          setIsLoggedIn(false);
+          setUserRole(null);
+          setFilteredMenuItems(menuItems);
         }
       } catch (error) {
         console.log('Error cargando datos del usuario:', error);
         // En caso de error, mostrar todos los items
+        setIsLoggedIn(false);
+        setUserRole(null);
         setFilteredMenuItems(menuItems);
       }
     };
@@ -96,8 +103,16 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   const handleItemPress = async (link) => {
     try {
-      // Verificar token antes de navegar
+      // Si el item es "Configuración", permitir acceso sin verificar login
+      if (link === 'config') {
+        router.push('/config');
+        onClose();
+        return;
+      }
+
+      // Para otros items, verificar si está logueado
       const configString = await AsyncStorage.getItem('@config');
+      
       if (configString) {
         const config = JSON.parse(configString);
         
@@ -123,6 +138,27 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     }
   };
 
+  const handleLoginNavigation = () => {
+    router.replace('/login');
+    onClose();
+  };
+
+  // Función para determinar si un item está habilitado
+  const isItemEnabled = (item) => {
+    // Configuración siempre está habilitada
+    if (item.link === 'config') return true;
+    // Otros items solo si está logueado
+    return isLoggedIn;
+  };
+
+  // Función para determinar la opacidad del item
+  const getItemOpacity = (item) => {
+    // Configuración siempre opaca completa
+    if (item.link === 'config') return 1;
+    // Otros items dependen del login
+    return isLoggedIn ? 1 : 0.7;
+  };
+
   return (
     <>
       {/* Overlay background */}
@@ -146,16 +182,41 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
         {/* Información del usuario */}
         <View style={styles.userInfo}>
           <Text style={styles.userName}>
-            {userRole ? `Rol: ${userRole}` : 'Usuario no identificado'}
+            {isLoggedIn 
+              ? (userRole ? `Rol: ${userRole}` : 'Usuario conectado') 
+              : 'Usuario no identificado'
+            }
+          </Text>
+          <Text style={styles.loginStatus}>
+            {isLoggedIn ? '✅ Conectado' : '❌ No conectado'}
           </Text>
         </View>
+
+        {/* Botón de login si no está logueado */}
+        {!isLoggedIn && (
+          <TouchableOpacity 
+            style={styles.loginButton}
+            onPress={handleLoginNavigation}
+          >
+            <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
+          </TouchableOpacity>
+        )}
 
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
           {filteredMenuItems.map((item, index) => (
             <TouchableOpacity
               key={index}
-              style={[styles.menuItem, { borderWidth: 2, borderColor: Colors.primary, backgroundColor: Colors.primarySuave }]}
+              style={[
+                styles.menuItem, 
+                { 
+                  borderWidth: 2, 
+                  borderColor: Colors.primary, 
+                  backgroundColor: Colors.primarySuave,
+                  opacity: getItemOpacity(item) // Opacidad dinámica
+                }
+              ]}
               onPress={() => handleItemPress(item.link)}
+              disabled={!isItemEnabled(item)} // Habilitación dinámica
             >
               <Image
                 source={typeof item.icon === 'string' ? { uri: item.icon } : item.icon}
@@ -163,6 +224,20 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
                 resizeMode="contain"
               />
               <Text style={styles.itemText}>{item.name}</Text>
+              
+              {/* Mostrar badge "Login" solo para items que no son configuración y no está logueado */}
+              {!isLoggedIn && item.link !== 'config' && (
+                <View style={styles.loginRequiredBadge}>
+                  <Text style={styles.loginRequiredText}>Login</Text>
+                </View>
+              )}
+
+              {/* Badge especial para configuración */}
+              {item.link === 'config' && (
+                <View style={styles.alwaysAccessibleBadge}>
+                  <Text style={styles.alwaysAccessibleText}>Libre</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
           
@@ -211,12 +286,35 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.primary,
     marginBottom: Spacing.s,
+    alignItems: 'center',
   },
   userName: {
-    fontSize: Typography.small,
+    fontSize: Typography.body,
     color: Colors.textSecondary,
     fontWeight: '600',
     textAlign: 'center',
+    marginBottom: Spacing.xs,
+  },
+  loginStatus: {
+    fontSize: Typography.small,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  loginButton: {
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.m,
+    paddingHorizontal: Spacing.l,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginHorizontal: Spacing.m,
+    marginBottom: Spacing.m,
+    elevation: 2,
+  },
+  loginButtonText: {
+    color: Colors.textPrimary,
+    fontSize: Typography.body,
+    fontWeight: 'bold',
   },
   menuItem: {
     flexDirection: 'row',
@@ -226,6 +324,7 @@ const styles = StyleSheet.create({
     marginVertical: Spacing.s,
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    position: 'relative',
   },
   itemIcon: {
     width: 24,
@@ -236,6 +335,31 @@ const styles = StyleSheet.create({
     fontSize: Typography.body,
     color: Colors.textSecondary,
     fontWeight: '500',
+    flex: 1,
+  },
+  loginRequiredBadge: {
+    backgroundColor: Colors.error,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: Spacing.s,
+  },
+  loginRequiredText: {
+    color: 'white',
+    fontSize: Typography.small,
+    fontWeight: 'bold',
+  },
+  alwaysAccessibleBadge: {
+    backgroundColor: Colors.success,
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: Spacing.s,
+  },
+  alwaysAccessibleText: {
+    color: 'white',
+    fontSize: Typography.small,
+    fontWeight: 'bold',
   },
   noItemsContainer: {
     padding: Spacing.m,

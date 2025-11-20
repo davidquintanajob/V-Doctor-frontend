@@ -25,6 +25,17 @@ export const Colors = {
   boton_rojo_opciones: "#fe6e6e"
 };
 
+export const ColorsData = {
+  rojo: '#ff0000ff',
+  amarillo: '#eaff00ff',
+  verde: '#00ff15ff',
+  azul_cielo: '#00ddffff',
+  azul_oscuro: '#001affff',
+  rosado: '#dd00ffff',
+  violeta: '#7e0092ff',
+  blanco: '#ffffffff',
+};
+
 export const Spacing = {
   xs: 4,
   s: 8,

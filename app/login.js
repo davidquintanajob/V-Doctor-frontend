@@ -68,8 +68,6 @@ export default function LoginScreen() {
       const host = parsed?.api_host || parsed?.apihost || parsed?.apiHost;
       const url = host.replace(/\/+$/, '') + '/usuario/login';
 
-      console.log("URL llamada:", url);
-
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -122,7 +120,6 @@ export default function LoginScreen() {
       }
 
     } catch (error) {
-      console.log('Login error:', error);
       if (error.message.includes('Network request failed')) {
         Alert.alert('Error de conexión', 'No se pudo conectar al servidor');
       } else {
