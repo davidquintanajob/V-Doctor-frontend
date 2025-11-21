@@ -5,7 +5,8 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../variables';
 
 export default function ConfigScreen() {
-  const [apiHost, setApiHost] = useState('');
+  // Prellenar con la IP de desarrollo solicitada. El usuario puede cambiar y guardar.
+  const [apiHost, setApiHost] = useState('http://192.168.1.2');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [hasExistingConfig, setHasExistingConfig] = useState(false);

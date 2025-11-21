@@ -18,7 +18,6 @@
       "buildNumber": "1"
     },
     "android": {
-      "usesCleartextTraffic": true,
       "networkSecurityConfig": "res/xml/network_security_config.xml",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -38,7 +37,15 @@
     },
     "plugins": [
       "expo-router",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
     ]
   }
 }
