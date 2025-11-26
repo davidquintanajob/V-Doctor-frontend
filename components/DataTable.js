@@ -37,15 +37,15 @@ const DataTable = ({
   // Función para renderizar el contenido de la celda
   const renderCellContent = (item, column) => {
     const value = getNestedValue(item, column.key);
-    
+
     if (column.cellRenderer) {
       return column.cellRenderer(value, item);
     }
-    
+
     if (column.format) {
       return column.format(value);
     }
-    
+
     return value?.toString() || '';
   };
 
@@ -83,18 +83,18 @@ const DataTable = ({
             {/* Encabezado */}
             <View style={styles.header}>
               {columns.map((column, index) => (
-                  <View 
-                    key={column.key} 
-                    style={[
-                      styles.headerCell,
-                      column.width ? { width: column.width } : { flex: column.flex || 1 },
-                      index === 0 && styles.firstHeaderCell,
-                      index === columns.length - 1 && styles.lastHeaderCell
-                    ]}
-                  >
-                    <Text style={styles.headerText}>{column.label}</Text>
-                  </View>
-                ))}
+                <View
+                  key={column.key}
+                  style={[
+                    styles.headerCell,
+                    column.width ? { width: column.width } : { flex: column.flex || 1 },
+                    index === 0 && styles.firstHeaderCell,
+                    index === columns.length - 1 && styles.lastHeaderCell
+                  ]}
+                >
+                  <Text style={styles.headerText}>{column.label}</Text>
+                </View>
+              ))}
               {actions.length > 0 && (
                 <View style={[styles.headerCell, styles.actionsHeaderCell]}>
                   <Text style={styles.headerText}>Acciones</Text>
@@ -104,93 +104,93 @@ const DataTable = ({
 
             {/* Cuerpo de la tabla (scroll vertical) */}
             <ScrollView style={styles.tableBody}>
-          {/* Estado de carga */}
-          {isLoading && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={Colors.primary} />
-              <Text style={styles.loadingText}>Cargando datos...</Text>
-            </View>
-          )}
-
-          {/* Datos (server-side): mostrar los items tal cual vienen del servidor */}
-          {!isLoading && (items || []).map((item, rowIndex) => (
-            <TouchableOpacity
-              key={item.id ?? rowIndex}
-              style={styles.row}
-              onPress={() => onRowClick && onRowClick(item)}
-              activeOpacity={0.7}
-            >
-              {columns.map((column, colIndex) => (
-                <View 
-                  key={column.key}
-                  style={[
-                    styles.cell,
-                    column.width ? { width: column.width } : { flex: column.flex || 1 },
-                    colIndex === 0 && styles.firstCell,
-                    colIndex === columns.length - 1 && styles.lastCell
-                  ]}
-                >
-                  {/* Contenedor para primera columna con posible icono de nota */}
-                  {colIndex === 0 ? (
-                    <View style={styles.firstCellContainer}>
-                      {/* Barra de color al inicio de la fila si item.color */}
-                      <View style={[styles.rowColorBar, { backgroundColor: item?.color || 'transparent' }]} />
-                      <View style={styles.cellContent}>
-                        <Text style={styles.cellText}>{renderCellContent(item, column)}</Text>
-                      </View>
-                      {getNestedValue(item, 'nota') && <NoteIcon />}
-                    </View>
-                  ) : (
-                    <View style={styles.cellContent}>
-                      {renderCellContent(item, column)}
-                    </View>
-                  )}
-                </View>
-              ))}
-              
-              {/* Columna de acciones */}
-              {actions.length > 0 && (
-                <View style={[styles.cell, styles.actionsCell]}>
-                  <View style={styles.actionsContainer}>
-                    {actions
-                      .filter(action => !action.visible || action.visible(item))
-                      .map((action, actionIndex) => (
-                        <TouchableOpacity
-                          key={actionIndex}
-                          style={[
-                            styles.actionButton,
-                            action.buttonStyle
-                          ]}
-                          onPress={() => action.handler(item)}
-                        >
-                          {action.icon && (
-                            <View style={styles.actionIcon}>
-                              {action.icon}
-                            </View>
-                          )}
-                          {!action.iconOnly && (
-                            <Text style={[
-                              styles.actionText,
-                              action.textStyle
-                            ]}>
-                              {action.name}
-                            </Text>
-                          )}
-                        </TouchableOpacity>
-                      ))}
-                  </View>
+              {/* Estado de carga */}
+              {isLoading && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="large" color={Colors.primary} />
+                  <Text style={styles.loadingText}>Cargando datos...</Text>
                 </View>
               )}
-            </TouchableOpacity>
-          ))}
 
-          {/* Mensaje cuando no hay datos */}
-          {!isLoading && items.length === 0 && (
-            <View style={styles.noDataContainer}>
-              <Text style={styles.noDataText}>No hay datos disponibles</Text>
-            </View>
-          )}
-        </ScrollView>
+              {/* Datos (server-side): mostrar los items tal cual vienen del servidor */}
+              {!isLoading && (items || []).map((item, rowIndex) => (
+                <TouchableOpacity
+                  key={item.id ?? rowIndex}
+                  style={styles.row}
+                  onPress={() => onRowClick && onRowClick(item)}
+                  activeOpacity={0.7}
+                >
+                  {columns.map((column, colIndex) => (
+                    <View
+                      key={column.key}
+                      style={[
+                        styles.cell,
+                        column.width ? { width: column.width } : { flex: column.flex || 1 },
+                        colIndex === 0 && styles.firstCell,
+                        colIndex === columns.length - 1 && styles.lastCell
+                      ]}
+                    >
+                      {/* Contenedor para primera columna con posible icono de nota */}
+                      {colIndex === 0 ? (
+                        <View style={styles.firstCellContainer}>
+                          {/* Barra de color al inicio de la fila si item.color */}
+                          <View style={[styles.rowColorBar, { backgroundColor: item?.color || 'transparent' }]} />
+                          <View style={styles.cellContent}>
+                            <Text style={styles.cellText}>{renderCellContent(item, column)}</Text>
+                          </View>
+                          {getNestedValue(item, 'nota') && <NoteIcon />}
+                        </View>
+                      ) : (
+                        <View style={styles.cellContent}>
+                          <Text style={styles.cellText}>{renderCellContent(item, column)}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+
+                  {/* Columna de acciones */}
+                  {actions.length > 0 && (
+                    <View style={[styles.cell, styles.actionsCell]}>
+                      <View style={styles.actionsContainer}>
+                        {actions
+                          .filter(action => !action.visible || action.visible(item))
+                          .map((action, actionIndex) => (
+                            <TouchableOpacity
+                              key={actionIndex}
+                              style={[
+                                styles.actionButton,
+                                action.buttonStyle
+                              ]}
+                              onPress={() => action.handler(item)}
+                            >
+                              {action.icon && (
+                                <View style={styles.actionIcon}>
+                                  {action.icon}
+                                </View>
+                              )}
+                              {!action.iconOnly && (
+                                <Text style={[
+                                  styles.actionText,
+                                  action.textStyle
+                                ]}>
+                                  {action.name}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                      </View>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+
+              {/* Mensaje cuando no hay datos */}
+              {!isLoading && items.length === 0 && (
+                <View style={styles.noDataContainer}>
+                  <Text style={styles.noDataText}>No hay datos disponibles</Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </ScrollView>
       </View>
@@ -200,7 +200,7 @@ const DataTable = ({
         <Text style={styles.paginationInfo}>
           {startIndex} - {endIndex} de {totalItems}
         </Text>
-        
+
         <View style={styles.paginationControls}>
           <TouchableOpacity
             style={[
@@ -217,11 +217,11 @@ const DataTable = ({
               Anterior
             </Text>
           </TouchableOpacity>
-          
+
           <Text style={styles.paginationPageInfo}>
             Página {currentPage} de {totalPages}
           </Text>
-          
+
           <TouchableOpacity
             style={[
               styles.paginationButton,

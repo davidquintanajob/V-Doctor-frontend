@@ -12,27 +12,35 @@ export default function HomeScreen() {
   const router = useRouter();
   const [checkingConfig, setCheckingConfig] = useState(true);
 
-  // Datos para los botones - puedes modificar las imágenes y textos
+  // Datos para los botones - definir cuáles son accesibles sin login
   const buttonData = [
     {
       id: 1,
       name: 'Pacientes',
       image: require('../assets/images/huella.png'),
+      link: 'pacientes',
+      requiresLogin: false, // Accesible sin login
     },
     {
       id: 2,
       name: 'Clientes',
       image: require('../assets/images/customers.png'),
+      link: 'clientes',
+      requiresLogin: false, // Accesible sin login
     },
     {
       id: 3,
       name: 'Calendario',
       image: require('../assets/images/calendar.png'),
+      link: 'calendario',
+      requiresLogin: false, // Accesible sin login
     },
     {
       id: 4,
       name: 'Ventas',
       image: require('../assets/images/shopping-cart.png'),
+      link: 'ventas',
+      requiresLogin: true, // Requiere login
     },
   ];
 
@@ -40,9 +48,15 @@ export default function HomeScreen() {
     router.push(`/${link}`);
   };
 
-  const handleButtonPress = async (buttonName) => {
+  const handleButtonPress = async (button) => {
     try {
-      // Verificar token antes de navegar
+      // Si el botón no requiere login, navegar directamente
+      if (!button.requiresLogin) {
+        router.push(`/${button.link}`);
+        return;
+      }
+
+      // Si requiere login, verificar token
       const configString = await AsyncStorage.getItem('@config');
       if (!configString) {
         Alert.alert('Sesión requerida', 'Debes iniciar sesión para acceder a esta función');
@@ -58,22 +72,7 @@ export default function HomeScreen() {
       }
 
       // Si hay token, navegar normalmente
-      switch (buttonName) {
-        case 'Pacientes':
-          router.push('/pacientes');
-          break;
-        case 'Clientes':
-          router.push('/clientes');
-          break;
-        case 'Calendario':
-          router.push('/calendario');
-          break;
-        case 'Ventas':
-          router.push('/ventas');
-          break;
-        default:
-          Alert.alert('Función', `Función de ${buttonName}`);
-      }
+      router.push(`/${button.link}`);
     } catch (error) {
       console.log('Error verificando token:', error);
       Alert.alert('Error', 'Error al verificar la sesión');
@@ -122,8 +121,11 @@ export default function HomeScreen() {
           {rowButtons.map((button) => (
             <TouchableOpacity
               key={button.id}
-              style={styles.menuButton}
-              onPress={() => handleButtonPress(button.name)}
+              style={[
+                styles.menuButton,
+                !button.requiresLogin && styles.freeAccessButton // Estilo diferente para acceso libre
+              ]}
+              onPress={() => handleButtonPress(button)}
             >
               <Image
                 source={button.image}
@@ -131,6 +133,13 @@ export default function HomeScreen() {
                 resizeMode="contain"
               />
               <Text style={styles.buttonText}>{button.name}</Text>
+              
+              {/* Badge para indicar acceso libre */}
+              {!button.requiresLogin && (
+                <View style={styles.freeAccessBadge}>
+                  <Text style={styles.freeAccessBadgeText}>Libre</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -169,6 +178,13 @@ export default function HomeScreen() {
               <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
                 <Text style={styles.loginButtonText}>Iniciar Sesión</Text>
               </TouchableOpacity>
+
+              {/* Información sobre el acceso */}
+              <View style={styles.accessInfo}>
+                <Text style={styles.accessInfoText}>
+                  💡 Algunas funciones están disponibles sin iniciar sesión
+                </Text>
+              </View>
             </View>
           </ScrollView>
         </>
@@ -194,90 +210,123 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: screenWidth * 0.05, // 5% del ancho de pantalla
-    paddingVertical: screenHeight * 0.02, // 2% del alto de pantalla
+    paddingHorizontal: screenWidth * 0.05,
+    paddingVertical: screenHeight * 0.02,
   },
   logoContainer: {
     width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: screenHeight * 0.01, // 1% del alto
+    paddingVertical: screenHeight * 0.01,
   },
   logo: {
-    width: screenWidth * 0.4, // 40% del ancho de pantalla
-    height: screenHeight * 0.15, // 15% del alto de pantalla
-    maxWidth: 200, // Límite máximo para tablets
-    maxHeight: 150, // Límite máximo para tablets
+    width: screenWidth * 0.4,
+    height: screenHeight * 0.15,
+    maxWidth: 200,
+    maxHeight: 150,
   },
   title: {
-    fontSize: screenWidth * 0.06, // 6% del ancho de pantalla
+    fontSize: screenWidth * 0.06,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
-    marginBottom: screenHeight * 0.01, // 1% del alto
+    marginBottom: screenHeight * 0.01,
   },
   subtitle: {
-    fontSize: screenWidth * 0.04, // 4% del ancho de pantalla
-    marginBottom: screenHeight * 0.04, // 4% del alto
+    fontSize: screenWidth * 0.04,
+    marginBottom: screenHeight * 0.04,
     color: '#666',
     textAlign: 'center',
   },
   buttonsContainer: {
     width: '100%',
-    marginBottom: screenHeight * 0.04, // 4% del alto
+    marginBottom: screenHeight * 0.04,
   },
   buttonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: screenHeight * 0.02, // 2% del alto
-    paddingHorizontal: screenWidth * 0.02, // 2% del ancho
+    marginBottom: screenHeight * 0.02,
+    paddingHorizontal: screenWidth * 0.02,
   },
   menuButton: {
     backgroundColor: Colors.primary,
-    width: '48%', // Mantenemos el 48% para el espacio entre botones
-    aspectRatio: 1, // Mantiene forma cuadrada
+    width: '48%',
+    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: screenWidth * 0.04, // 4% del ancho
-    padding: screenWidth * 0.03, // 3% del ancho
+    borderRadius: screenWidth * 0.04,
+    padding: screenWidth * 0.03,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    minHeight: screenWidth * 0.3, // Altura mínima para botones muy pequeños
+    minHeight: screenWidth * 0.3,
+    position: 'relative', // Para posicionar el badge
+  },
+  freeAccessButton: {
+    backgroundColor: '#4CAF50', // Color diferente para acceso libre
+    borderWidth: 2,
+    borderColor: '#2E7D32',
   },
   buttonImage: {
-    width: '60%', // 60% del ancho del botón
-    height: '60%', // 60% del alto del botón
-    marginBottom: '5%', // 5% del alto del botón
+    width: '60%',
+    height: '60%',
+    marginBottom: '5%',
     tintColor: Colors.textPrimary
   },
   buttonText: {
     color: Colors.textPrimary,
-    fontSize: screenWidth * 0.035, // 3.5% del ancho de pantalla
+    fontSize: screenWidth * 0.035,
     fontWeight: 'bold',
     textAlign: 'center',
-    minFontSize: 12, // Tamaño mínimo de fuente
+    minFontSize: 12,
+  },
+  freeAccessBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#2E7D32',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  freeAccessBadgeText: {
+    color: 'white',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   loginButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: screenWidth * 0.1, // 10% del ancho
-    paddingVertical: screenHeight * 0.02, // 2% del alto
-    borderRadius: screenWidth * 0.08, // 8% del ancho
+    paddingHorizontal: screenWidth * 0.1,
+    paddingVertical: screenHeight * 0.02,
+    borderRadius: screenWidth * 0.08,
     elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    minWidth: screenWidth * 0.5, // 50% del ancho mínimo
+    minWidth: screenWidth * 0.5,
     alignItems: 'center',
-    marginTop: screenHeight * -0.03, // -3% del alto
-    marginBottom: screenHeight * 0.05, // 5% del alto
+    marginTop: screenHeight * -0.03,
+    marginBottom: screenHeight * 0.05,
   },
   loginButtonText: {
     color: 'white',
-    fontSize: screenWidth * 0.045, // 4.5% del ancho de pantalla
+    fontSize: screenWidth * 0.045,
     fontWeight: 'bold',
+  },
+  accessInfo: {
+    backgroundColor: '#E3F2FD',
+    padding: screenWidth * 0.03,
+    borderRadius: screenWidth * 0.02,
+    marginTop: screenHeight * -0.02,
+    marginBottom: screenHeight * 0.02,
+  },
+  accessInfoText: {
+    fontSize: screenWidth * 0.03,
+    color: '#1565C0',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

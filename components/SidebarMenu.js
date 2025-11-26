@@ -22,20 +22,20 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
   const [userRole, setUserRole] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Definir los items con roles visibles
+  // Definir los items con roles visibles y accesibilidad sin login
   const menuItems = [
     { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
+    { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicios', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'calendario', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'calendario', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'ventas', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'estetica', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'inventario', rolVisible: ["Administrador", "Médico", "Técnico"] },
     { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
     { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'informes', rolVisible: ['Administrador'] },
     { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'config', rolVisible: ['Administrador'] },
-    { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true }, // Nueva propiedad
+    { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
   ];
 
   const slideAnim = React.useRef(new Animated.Value(-MENU_WIDTH)).current;
@@ -68,23 +68,26 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
               setFilteredMenuItems(menuItems);
             }
           } else {
-            // No hay token, usuario no logueado - mostrar todos los items
+            // No hay token, usuario no logueado - mostrar items accesibles sin login
             setIsLoggedIn(false);
             setUserRole(null);
-            setFilteredMenuItems(menuItems);
+            const accessibleItems = menuItems.filter(item => item.alwaysAccessible);
+            setFilteredMenuItems(accessibleItems);
           }
         } else {
-          // No hay configuración, usuario no logueado - mostrar todos los items
+          // No hay configuración, usuario no logueado - mostrar items accesibles sin login
           setIsLoggedIn(false);
           setUserRole(null);
-          setFilteredMenuItems(menuItems);
+          const accessibleItems = menuItems.filter(item => item.alwaysAccessible);
+          setFilteredMenuItems(accessibleItems);
         }
       } catch (error) {
         console.log('Error cargando datos del usuario:', error);
-        // En caso de error, mostrar todos los items
+        // En caso de error, mostrar items accesibles sin login
         setIsLoggedIn(false);
         setUserRole(null);
-        setFilteredMenuItems(menuItems);
+        const accessibleItems = menuItems.filter(item => item.alwaysAccessible);
+        setFilteredMenuItems(accessibleItems);
       }
     };
 
@@ -101,11 +104,11 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     }).start();
   }, [isOpen]);
 
-  const handleItemPress = async (link) => {
+  const handleItemPress = async (link, alwaysAccessible = false) => {
     try {
-      // Si el item es "Configuración", permitir acceso sin verificar login
-      if (link === 'config') {
-        router.push('/config');
+      // Si el item es siempre accesible, permitir acceso sin verificar login
+      if (alwaysAccessible) {
+        router.push(`/${link}`);
         onClose();
         return;
       }
@@ -145,18 +148,36 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Función para determinar si un item está habilitado
   const isItemEnabled = (item) => {
-    // Configuración siempre está habilitada
-    if (item.link === 'config') return true;
+    // Items con alwaysAccessible están siempre habilitados
+    if (item.alwaysAccessible) return true;
     // Otros items solo si está logueado
     return isLoggedIn;
   };
 
   // Función para determinar la opacidad del item
   const getItemOpacity = (item) => {
-    // Configuración siempre opaca completa
-    if (item.link === 'config') return 1;
+    // Items con alwaysAccessible siempre opaca completa
+    if (item.alwaysAccessible) return 1;
     // Otros items dependen del login
     return isLoggedIn ? 1 : 0.7;
+  };
+
+  // Función para obtener el badge apropiado
+  const getItemBadge = (item) => {
+    if (item.alwaysAccessible) {
+      return (
+        <View style={styles.alwaysAccessibleBadge}>
+          <Text style={styles.alwaysAccessibleText}>Libre</Text>
+        </View>
+      );
+    } else if (!isLoggedIn) {
+      return (
+        <View style={styles.loginRequiredBadge}>
+          <Text style={styles.loginRequiredText}>Login</Text>
+        </View>
+      );
+    }
+    return null;
   };
 
   return (
@@ -215,7 +236,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
                   opacity: getItemOpacity(item) // Opacidad dinámica
                 }
               ]}
-              onPress={() => handleItemPress(item.link)}
+              onPress={() => handleItemPress(item.link, item.alwaysAccessible)}
               disabled={!isItemEnabled(item)} // Habilitación dinámica
             >
               <Image
@@ -225,19 +246,8 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
               />
               <Text style={styles.itemText}>{item.name}</Text>
               
-              {/* Mostrar badge "Login" solo para items que no son configuración y no está logueado */}
-              {!isLoggedIn && item.link !== 'config' && (
-                <View style={styles.loginRequiredBadge}>
-                  <Text style={styles.loginRequiredText}>Login</Text>
-                </View>
-              )}
-
-              {/* Badge especial para configuración */}
-              {item.link === 'config' && (
-                <View style={styles.alwaysAccessibleBadge}>
-                  <Text style={styles.alwaysAccessibleText}>Libre</Text>
-                </View>
-              )}
+              {/* Mostrar badge apropiado */}
+              {getItemBadge(item)}
             </TouchableOpacity>
           ))}
           
@@ -255,6 +265,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
   );
 };
 
+// Los estilos se mantienen igual...
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
