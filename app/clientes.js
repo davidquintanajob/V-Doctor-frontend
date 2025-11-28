@@ -708,6 +708,14 @@ export default function ClientesScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.primaryDark, paddingVertical: Spacing.s, paddingHorizontal: Spacing.s, borderRadius: 8, width: '102%', height: 50 }}
+            onPress={() => router.push({ pathname: '/asociarPacienteCliente' })}>
+            <Image source={require('../assets/images/intercambiar.png')} style={styles.saveButtonIcon} resizeMode="contain" />
+            <Text style={styles.saveButtonText}>Asociar Pacientes con Clientes</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Tabla de clientes - asegurar que items siempre sea un array */}
         <View style={styles.tableContainer}>
           <DataTable

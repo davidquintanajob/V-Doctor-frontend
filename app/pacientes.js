@@ -23,6 +23,18 @@ import { Colors, Spacing, Typography } from '../variables';
 
 const { width: screenWidth } = Dimensions.get('window');
 
+export const especies = [
+    { id: 1, nombre: 'Canino', image: require('../assets/images/especies/canino.png') },
+    { id: 2, nombre: 'Felino', image: require('../assets/images/especies/gato-egipcio.png') },
+    { id: 3, nombre: 'Ave', image: require('../assets/images/especies/gorrion.png') },
+    { id: 4, nombre: 'Roedor', image: require('../assets/images/especies/huella.png') },
+    { id: 5, nombre: 'Peces', image: require('../assets/images/especies/huella.png') },
+    { id: 6, nombre: 'Caprino', image: require('../assets/images/especies/huella.png') },
+    { id: 7, nombre: 'Porcino', image: require('../assets/images/especies/cerdo.png') },
+    { id: 8, nombre: 'Ovino', image: require('../assets/images/especies/huella.png') },
+    { id: 9, nombre: 'Otros', image: require('../assets/images/especies/huella.png') },
+  ];
+  
 export default function PacientesScreen() {
   const router = useRouter();
 
@@ -73,18 +85,6 @@ export default function PacientesScreen() {
     { id: 1, nombre: 'masculino' },
     { id: 2, nombre: 'femenino' },
     { id: 3, nombre: 'otros' }
-  ];
-
-  const especies = [
-    { id: 1, nombre: 'Canino', image: require('../assets/images/especies/canino.png') },
-    { id: 2, nombre: 'Felino', image: require('../assets/images/especies/gato-egipcio.png') },
-    { id: 3, nombre: 'Ave', image: require('../assets/images/especies/gorrion.png') },
-    { id: 4, nombre: 'Roedor', image: require('../assets/images/especies/huella.png') },
-    { id: 5, nombre: 'Peces', image: require('../assets/images/especies/huella.png') },
-    { id: 6, nombre: 'Caprino', image: require('../assets/images/especies/huella.png') },
-    { id: 7, nombre: 'Porcino', image: require('../assets/images/especies/cerdo.png') },
-    { id: 8, nombre: 'Ovino', image: require('../assets/images/especies/huella.png') },
-    { id: 9, nombre: 'Otros', image: require('../assets/images/especies/huella.png') },
   ];
 
   const handleMenuNavigate = (link) => {
@@ -259,10 +259,19 @@ export default function PacientesScreen() {
       const data = await response.json();
       const pacientes = Array.isArray(data) ? data : data.data || [];
 
-      await AsyncStorage.setItem('@pacientes', JSON.stringify(pacientes));
-      ToastAndroid.show(`✅ ${pacientes.length} pacientes guardados localmente`, ToastAndroid.LONG);
-      setPacientesData(pacientes.map(p => ({ ...p, id: p.id_paciente ?? p.id })));
-      setTotalItems(pacientes.length);
+      // ✅ Mapear pacientes para eliminar foto_ruta antes de guardar
+      const pacientesSinFotos = pacientes.map(paciente => {
+        const { foto_ruta, ...pacienteSinFoto } = paciente;
+        return {
+          ...pacienteSinFoto,
+          id: paciente.id_paciente ?? paciente.id
+        };
+      });
+
+      await AsyncStorage.setItem('@pacientes', JSON.stringify(pacientesSinFotos));
+      ToastAndroid.show(`✅ ${pacientesSinFotos.length} pacientes guardados localmente`, ToastAndroid.LONG);
+      setPacientesData(pacientesSinFotos);
+      setTotalItems(pacientesSinFotos.length);
     } catch (error) {
       console.error('Error guardarPacientesLocales:', error);
       ToastAndroid.show('Error al guardar pacientes', ToastAndroid.SHORT);

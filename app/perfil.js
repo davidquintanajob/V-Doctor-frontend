@@ -10,7 +10,8 @@ import {
   TouchableOpacity,
   Dimensions,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  ToastAndroid
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -119,7 +120,7 @@ export default function PerfilScreen() {
       }
 
       const config = JSON.parse(configString);
-      
+
       // Verificar si hay usuario y token
       if (!config.usuario || !config.token) {
         router.replace('/login');
@@ -157,7 +158,7 @@ export default function PerfilScreen() {
         } else if (responseData.message) {
           errorMessage = responseData.message;
         }
-        
+
         Alert.alert(
           `Error ${response.status}`,
           errorMessage,
@@ -168,11 +169,11 @@ export default function PerfilScreen() {
 
       // Contraseña cambiada exitosamente
       Alert.alert(
-        'Éxito', 
+        'Éxito',
         'Tu contraseña ha sido cambiada correctamente',
         [
-          { 
-            text: 'OK', 
+          {
+            text: 'OK',
             onPress: () => {
               // Limpiar campos después del éxito
               setOldPassword('');
@@ -199,6 +200,143 @@ export default function PerfilScreen() {
     }
   };
 
+  // Función para cerrar sesión
+  const handleLogout = async () => {
+    Alert.alert(
+      'Cerrar Sesión',
+      '¿Estás seguro de que deseas cerrar sesión?',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Cerrar Sesión',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Obtener la configuración actual
+              const configString = await AsyncStorage.getItem('@config');
+              if (configString) {
+                const config = JSON.parse(configString);
+
+                // Eliminar solo los datos del usuario (usuario, token, refreshToken)
+                const { usuario, token, refreshToken, ...configSinUsuario } = config;
+
+                // Guardar la configuración sin los datos del usuario
+                await AsyncStorage.setItem('@config', JSON.stringify(configSinUsuario));
+
+                // Ejecutar las funciones para guardar datos locales antes de redirigir
+                await guardarClientesLocales();
+                await guardarPacientesLocales();
+
+                ToastAndroid.show('Sesión cerrada correctamente', ToastAndroid.SHORT);
+              }
+
+              // Redirigir al login
+              router.replace('/login');
+
+            } catch (error) {
+              console.error('Error al cerrar sesión:', error);
+              ToastAndroid.show('Error al cerrar sesión', ToastAndroid.SHORT);
+              // Redirigir al login incluso si hay error
+              router.replace('/login');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Función para guardar clientes locales (copiada de tu código)
+  const guardarClientesLocales = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('@config');
+      if (!raw) {
+        return;
+      }
+
+      const config = JSON.parse(raw);
+      const host = config.api_host || config.apihost || config.apiHost;
+      const token = config.token;
+
+      if (!host) {
+        return;
+      }
+
+      const url = `${host.replace(/\/+$/, '')}/cliente`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+
+      if (response.status === 403) {
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return;
+      }
+
+      const data = await response.json();
+      const clientes = Array.isArray(data) ? data : data.data || [];
+
+      // Guardar en AsyncStorage
+      await AsyncStorage.setItem('@clientes', JSON.stringify(clientes));
+
+      ToastAndroid.show(`✅ ${clientes.length} clientes guardados localmente`, ToastAndroid.LONG);
+
+    } catch (error) {
+      console.error('Error guardando clientes locales:', error);
+    }
+  };
+
+  // Función para guardar pacientes locales (copiada de tu código)
+  const guardarPacientesLocales = async () => {
+    try {
+      const raw = await AsyncStorage.getItem('@config');
+      if (!raw) throw new Error('No hay configuración');
+      const config = JSON.parse(raw);
+      const host = config.api_host || config.apihost || config.apiHost;
+      const token = config.token;
+      if (!host) throw new Error('Host no configurado');
+
+      const url = `${host.replace(/\/+$/, '')}/paciente`;
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!response.ok) throw new Error('Error al descargar pacientes');
+      const data = await response.json();
+      const pacientes = Array.isArray(data) ? data : data.data || [];
+
+      // Mapear pacientes para eliminar foto_ruta antes de guardar
+      const pacientesSinFotos = pacientes.map(paciente => {
+        const { foto_ruta, ...pacienteSinFoto } = paciente;
+        return {
+          ...pacienteSinFoto,
+          id: paciente.id_paciente ?? paciente.id
+        };
+      });
+
+      await AsyncStorage.setItem('@pacientes', JSON.stringify(pacientesSinFotos));
+      ToastAndroid.show(`✅ ${pacientesSinFotos.length} pacientes guardados localmente`, ToastAndroid.LONG);
+
+    } catch (error) {
+      console.error('Error guardarPacientesLocales:', error);
+      ToastAndroid.show('Error al guardar pacientes', ToastAndroid.SHORT);
+    }
+  };
+
   const handleMenuNavigate = (link) => {
     router.push(`/${link}`);
   };
@@ -219,12 +357,12 @@ export default function PerfilScreen() {
     <View style={styles.container}>
       <TopBar onMenuNavigate={handleMenuNavigate} />
 
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardAvoidingView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -282,6 +420,17 @@ export default function PerfilScreen() {
               </View>
             </View>
 
+            {/* Botón para cerrar sesión */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sesión</Text>
+              <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <Text style={styles.logoutButtonText}>Cerrar Sesión</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Cambio de contraseña */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Cambiar Contraseña</Text>
@@ -297,14 +446,14 @@ export default function PerfilScreen() {
                   editable={!changingPassword}
                   returnKeyType="next"
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.eyeButton}
                   onPress={() => setShowOldPassword(!showOldPassword)}
                   disabled={changingPassword}
                 >
                   <Image
                     source={
-                      showOldPassword 
+                      showOldPassword
                         ? require('../assets/images/eye-open.png')
                         : require('../assets/images/eye-closed.png')
                     }
@@ -325,14 +474,14 @@ export default function PerfilScreen() {
                   editable={!changingPassword}
                   returnKeyType="next"
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.eyeButton}
                   onPress={() => setShowNewPassword(!showNewPassword)}
                   disabled={changingPassword}
                 >
                   <Image
                     source={
-                      showNewPassword 
+                      showNewPassword
                         ? require('../assets/images/eye-open.png')
                         : require('../assets/images/eye-closed.png')
                     }
@@ -354,14 +503,14 @@ export default function PerfilScreen() {
                   returnKeyType="done"
                   onSubmitEditing={isChangePasswordEnabled ? handleChangePassword : undefined}
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.eyeButton}
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                   disabled={changingPassword}
                 >
                   <Image
                     source={
-                      showConfirmPassword 
+                      showConfirmPassword
                         ? require('../assets/images/eye-open.png')
                         : require('../assets/images/eye-closed.png')
                     }
@@ -410,11 +559,11 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
-  backButton: { 
-    position: 'absolute', 
-    left: 10, 
-    top: 10, 
-    padding: 8, 
+  backButton: {
+    position: 'absolute',
+    left: 10,
+    top: 10,
+    padding: 8,
     marginTop: 10,
     marginLeft: 20,
     backgroundColor: Colors.primarySuave,
@@ -541,6 +690,18 @@ const styles = StyleSheet.create({
     marginTop: Spacing.s,
   },
   changePasswordButtonText: {
+    color: Colors.textPrimary,
+    fontSize: screenWidth * 0.045,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: Colors.error,
+    paddingVertical: Spacing.m,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: Spacing.s,
+  },
+  logoutButtonText: {
     color: Colors.textPrimary,
     fontSize: screenWidth * 0.045,
     fontWeight: 'bold',

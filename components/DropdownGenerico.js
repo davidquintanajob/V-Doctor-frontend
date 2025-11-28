@@ -19,24 +19,24 @@ const DropdownGenerico = ({
   value,
   onValueChange,
   placeholder = "Seleccionar...",
-  
+
   // Props para mostrar y buscar
   displayKey,        // Clave para mostrar en la lista
   searchKey,         // Clave para buscar
   searchable = true, // Si permite búsqueda
   requiresSelection = false, // Si requiere selección obligatoria
-  
+
   // Props de estilo
   style,
   dropdownStyle,
   itemStyle,
   textStyle,
-  
+
   // Props para modo texto libre
   enableFreeText = false,
   onFreeTextChange,
   freeTextValue = '',
-  
+
   // Otros props
   disabled = false,
   maxHeight = 400,
@@ -54,7 +54,7 @@ const DropdownGenerico = ({
     } else {
       const filtered = data.filter(item => {
         const searchField = searchKey ? item[searchKey] : item;
-        const searchString = typeof searchField === 'string' ? 
+        const searchString = typeof searchField === 'string' ?
           searchField.toLowerCase() : String(searchField).toLowerCase();
         return searchString.includes(searchText.toLowerCase());
       });
@@ -92,13 +92,13 @@ const DropdownGenerico = ({
     if (enableFreeText && freeTextValue) {
       return freeTextValue;
     }
-    
+
     if (!value) return placeholder;
-    
+
     if (displayKey && typeof value === 'object') {
       return value[displayKey] || placeholder;
     }
-    
+
     return value || placeholder;
   };
 
@@ -106,7 +106,7 @@ const DropdownGenerico = ({
   const renderItem = ({ item }) => {
     const displayText = displayKey ? item[displayKey] : item;
     const displayString = typeof displayText === 'string' ? displayText : String(displayText);
-    
+
     return (
       <TouchableOpacity
         style={[styles.item, itemStyle]}
@@ -145,7 +145,7 @@ const DropdownGenerico = ({
             {getDisplayValue()}
           </Text>
         )}
-        
+
         {/* Icono de flecha */}
         <View style={styles.arrow}>
           <Text style={styles.arrowText}>{isVisible ? '▲' : '▼'}</Text>
@@ -183,7 +183,7 @@ const DropdownGenerico = ({
             <FlatList
               data={filteredData}
               renderItem={renderItem}
-              keyExtractor={(item, index) => 
+              keyExtractor={(item, index) =>
                 (typeof item === 'object' ? item.id || index : String(item)) + index
               }
               ListEmptyComponent={
@@ -220,7 +220,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   disabled: {
-    backgroundColor: Colors.textSecondary,
+    backgroundColor: '#eee',
+    color: '#888',
     opacity: 0.6,
   },
   input: {

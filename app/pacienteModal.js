@@ -24,6 +24,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import TopBar from '../components/TopBar';
 import DropdownGenerico from '../components/DropdownGenerico';
 import DataTable from '../components/DataTable';
+import PatientSidebarMenu from '../components/PatientSidebarMenu';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
 
 export default function PacienteModalScreen() {
@@ -59,6 +60,7 @@ export default function PacienteModalScreen() {
     const [token, setToken] = useState(null);
     const [showPacienteInfo, setShowPacienteInfo] = useState(false);
     const [showPacienteColorPicker, setShowPacienteColorPicker] = useState(false);
+    const [showPatientMenu, setShowPatientMenu] = useState(false);
     // Estado para el formulario de cliente dentro del contenedor secundario
     const [clienteData, setClienteData] = useState({
         nombre: '',
@@ -145,21 +147,21 @@ export default function PacienteModalScreen() {
     const calculateAgeFromDate = (birthDate) => {
         const now = new Date();
         let years = now.getFullYear() - birthDate.getFullYear();
-        let months = now.getMonth() - birthDate.getMonth();
+        let meses = now.getMonth() - birthDate.getMonth();
         let days = now.getDate() - birthDate.getDate();
 
         if (days < 0) {
-            months -= 1;
+            meses -= 1;
             const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
             days += prevMonth.getDate();
         }
 
-        if (months < 0) {
+        if (meses < 0) {
             years -= 1;
-            months += 12;
+            meses += 12;
         }
 
-        return { years, months, days };
+        return { years, meses, days };
     };
 
     const formatDateToYMD = (date) => {
@@ -269,7 +271,6 @@ export default function PacienteModalScreen() {
                     // Verificar que la imagen existe
                     const response = await fetch(imageUrl, { method: 'HEAD' });
                     if (!response.ok) {
-                        console.warn('La imagen no existe en el servidor:', imageUrl);
                         setLoadedImageUri(null);
                     }
                 } catch (error) {
@@ -320,7 +321,7 @@ export default function PacienteModalScreen() {
                     if (!isNaN(d.getTime())) {
                         const age = calculateAgeFromDate(d);
                         setPacienteYears(String(age.years));
-                        setPacienteMonths(String(age.months));
+                        setPacienteMonths(String(age.meses));
                     }
                 }
             } catch (error) {
@@ -599,6 +600,16 @@ export default function PacienteModalScreen() {
                                     />
                                 </TouchableOpacity>
 
+                                {(mode !== "crear") && (
+                                    <TouchableOpacity onPress={() => setShowPatientMenu(true)} style={styles.menuButton}>
+                                    <Image
+                                        source={require('../assets/images/menu.png')}
+                                        style={styles.icon}
+                                        resizeMode="contain"
+                                    />
+                                </TouchableOpacity>
+                                )}
+
                                 <Text style={styles.sectionTitle}>
                                     {mode === 'crear' ? 'Crear Paciente' : mode === 'editar' ? 'Editar Paciente' : 'Ver Paciente'}
                                 </Text>
@@ -617,11 +628,12 @@ export default function PacienteModalScreen() {
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Nombre *</Text>
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, isView && styles.disabledInput]}
                                         value={pacienteData.nombre}
                                         onChangeText={(text) => setPacienteData(prev => ({ ...prev, nombre: text }))}
                                         placeholder="Nom mascota"
                                         placeholderTextColor="#999"
+                                        editable={!isView}
                                     />
                                 </View>
 
@@ -634,6 +646,7 @@ export default function PacienteModalScreen() {
                                         placeholder="Sexo"
                                         displayKey="nombre"
                                         searchKey="nombre"
+                                        disabled={isView}
                                     />
                                 </View>
                             </View>
@@ -642,11 +655,12 @@ export default function PacienteModalScreen() {
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Raza *</Text>
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, isView && styles.disabledInput]}
                                         value={pacienteData.raza}
                                         onChangeText={(text) => setPacienteData(prev => ({ ...prev, raza: text }))}
                                         placeholder="Raza"
                                         placeholderTextColor="#999"
+                                        editable={!isView}
                                     />
                                 </View>
 
@@ -659,6 +673,7 @@ export default function PacienteModalScreen() {
                                         placeholder="Especie"
                                         displayKey="nombre"
                                         searchKey="nombre"
+                                        disabled={isView}
                                     />
                                 </View>
                             </View>
@@ -669,7 +684,7 @@ export default function PacienteModalScreen() {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Fecha de Nacimiento *</Text>
                                 <TouchableOpacity
-                                    style={[styles.input, styles.datePickerTouchable]}
+                                    style={[styles.input, styles.datePickerTouchable, isView && styles.disabledInput]}
                                     onPress={() => { if (!isView) setShowDatePicker(true); }}
                                     activeOpacity={!isView ? 0.7 : 1}
                                 >
@@ -678,7 +693,7 @@ export default function PacienteModalScreen() {
                                     </Text>
                                 </TouchableOpacity>
 
-                                {showDatePicker && (
+                                {showDatePicker && !isView && (
                                     <DateTimePicker
                                         value={pacienteData.fecha_nacimiento ? new Date(pacienteData.fecha_nacimiento) : new Date(2025, 0, 1)}
                                         mode="date"
@@ -694,24 +709,26 @@ export default function PacienteModalScreen() {
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Años aproximados</Text>
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, isView && styles.disabledInput]}
                                         value={pacienteYears}
                                         onChangeText={(text) => setPacienteYears(text.replace(/[^0-9]/g, ''))}
                                         onEndEditing={() => updateDateFromYearsMonths(pacienteYears, pacienteMonths)}
                                         placeholder="0"
                                         keyboardType="numeric"
+                                        editable={!isView}
                                     />
                                 </View>
 
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Meses aproximados</Text>
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, isView && styles.disabledInput]}
                                         value={pacienteMonths}
                                         onChangeText={(text) => setPacienteMonths(text.replace(/[^0-9]/g, ''))}
                                         onEndEditing={() => updateDateFromYearsMonths(pacienteYears, pacienteMonths)}
                                         placeholder="0"
                                         keyboardType="numeric"
+                                        editable={!isView}
                                     />
                                 </View>
                             </View>
@@ -723,18 +740,19 @@ export default function PacienteModalScreen() {
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Chip</Text>
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, isView && styles.disabledInput]}
                                         value={pacienteChip}
                                         onChangeText={(text) => setPacienteChip(text)}
                                         placeholder="Chip"
                                         placeholderTextColor="#999"
+                                        editable={!isView}
                                     />
                                 </View>
 
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Peso (kg)(No disp)</Text>
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, styles.disabledInput]}
                                         value={pacientePeso}
                                         onChangeText={(text) => setPacientePeso(text.replace(/[^0-9\.]/g, ''))}
                                         placeholder="0.0"
@@ -749,33 +767,38 @@ export default function PacienteModalScreen() {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Descuento (%)</Text>
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, isView && styles.disabledInput]}
                                     value={descuento}
                                     onChangeText={(text) => setDescuento(clampDescuento(text.replace(/[^0-9]/g, '')))}
                                     placeholder="0"
                                     placeholderTextColor="#999"
                                     keyboardType="numeric"
+                                    editable={!isView}
                                 />
                             </View>
 
                             {/* Foto del paciente */}
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Foto del paciente</Text>
-                                <View style={styles.photoButtonsRow}>
-                                    <TouchableOpacity style={styles.photoButton} onPress={openCamera}>
-                                        <Text style={styles.photoButtonText}>Tomar foto</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.deletePhotoButton, (!photoUri && !loadedImageUri) && styles.deletePhotoButtonDisabled]}
-                                        onPress={() => {
-                                            removePhoto();
-                                            setLoadedImageUri(null); // También eliminar la imagen cargada
-                                        }}
-                                        disabled={!photoUri && !loadedImageUri}
-                                    >
-                                        <Text style={styles.deletePhotoButtonText}>Eliminar</Text>
-                                    </TouchableOpacity>
-                                </View>
+
+                                {/* Solo mostrar botones de foto si NO está en modo ver */}
+                                {!isView && (
+                                    <View style={styles.photoButtonsRow}>
+                                        <TouchableOpacity style={styles.photoButton} onPress={openCamera}>
+                                            <Text style={styles.photoButtonText}>Tomar foto</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.deletePhotoButton, (!photoUri && !loadedImageUri) && styles.deletePhotoButtonDisabled]}
+                                            onPress={() => {
+                                                removePhoto();
+                                                setLoadedImageUri(null); // También eliminar la imagen cargada
+                                            }}
+                                            disabled={!photoUri && !loadedImageUri}
+                                        >
+                                            <Text style={styles.deletePhotoButtonText}>Eliminar</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
 
                                 {/* Mostrar la nueva foto tomada O la imagen cargada */}
                                 {(photoUri || loadedImageUri) && (
@@ -801,10 +824,11 @@ export default function PacienteModalScreen() {
                                         maximumValue={100}
                                         step={1}
                                         value={agresividad}
-                                        onValueChange={(val) => { setAgresividad(val); }}
+                                        onValueChange={(val) => { if (!isView) setAgresividad(val); }}
                                         minimumTrackTintColor={Colors.primary ? Colors.primary : '#000'}
                                         maximumTrackTintColor={Colors.primarySuave}
                                         thumbTintColor={Colors.primary ? Colors.primary : '#000'}
+                                        disabled={isView}
                                     />
                                 </View>
 
@@ -814,7 +838,8 @@ export default function PacienteModalScreen() {
                                         <TouchableOpacity
                                             key={e}
                                             style={[styles.estadoButton, estadoPaciente === e && styles.estadoButtonSelected]}
-                                            onPress={() => setEstadoPaciente(prev => prev === e ? '' : e)}
+                                            onPress={() => { if (!isView) setEstadoPaciente(prev => prev === e ? '' : e); }}
+                                            disabled={isView}
                                         >
                                             <Text style={[styles.estadoButtonText, estadoPaciente === e && styles.estadoButtonTextSelected]}>{e}</Text>
                                         </TouchableOpacity>
@@ -832,6 +857,7 @@ export default function PacienteModalScreen() {
                                             placeholder="Seleccionar motivo"
                                             displayKey="nombre"
                                             searchKey="nombre"
+                                            disabled={isView}
                                         />
                                     </View>
                                 )}
@@ -954,6 +980,12 @@ export default function PacienteModalScreen() {
                     </ScrollView>
                 </TouchableWithoutFeedback>
             </KeyboardAvoidingView>
+            {/* Patient Sidebar Menu overlay */}
+            <PatientSidebarMenu
+                isOpen={showPatientMenu}
+                onClose={() => setShowPatientMenu(false)}
+                paciente={pacienteData}
+                apiHost={apiHost} />
         </View>
     );
 }
@@ -1081,6 +1113,10 @@ const styles = StyleSheet.create({
         fontSize: Typography.body,
         color: Colors.textSecondary,
     },
+    disabledInput: {
+        backgroundColor: '#eee',
+        color: '#888'
+    },
     inputWithIcon: {
         position: 'relative',
     },
@@ -1091,10 +1127,6 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         tintColor: Colors.textSecondary,
-    },
-    disabledInput: {
-        backgroundColor: '#eee',
-        color: '#888'
     },
     infoButton: {
         padding: Spacing.xs,
@@ -1291,5 +1323,13 @@ const styles = StyleSheet.create({
         width: 20,
         height: 20,
         tintColor: Colors.textPrimary,
+    },
+    menuButton: {
+        padding: Spacing.s,
+        borderRadius: 8,
+        backgroundColor: Colors.primarySuave,
+        marginLeft: 20,
+        borderWidth: 1,
+        borderColor: '#000',
     },
 });

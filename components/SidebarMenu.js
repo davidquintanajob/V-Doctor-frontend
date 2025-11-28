@@ -24,16 +24,16 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Definir los items con roles visibles y accesibilidad sin login
   const menuItems = [
-    { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
-    { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicios', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'calendario', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
-    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'ventas', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'estetica', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'inventario', rolVisible: ["Administrador", "Médico", "Técnico"] },
-    { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
-    { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'informes', rolVisible: ['Administrador'] },
+    { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
+    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico"] },
+    { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'NoDisponible', rolVisible: ['Administrador'] },
+    { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'NoDisponible', rolVisible: ['Administrador'] },
     { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'config', rolVisible: ['Administrador'] },
     { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
   ];
