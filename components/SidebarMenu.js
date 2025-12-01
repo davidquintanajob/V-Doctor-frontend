@@ -31,10 +31,10 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico"] },
+    { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'productosMedicamentos', rolVisible: ["Administrador", "Médico", "Técnico"] },
     { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
     { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'NoDisponible', rolVisible: ['Administrador'] },
-    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'config', rolVisible: ['Administrador'] },
+    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'cambioMoneda', rolVisible: ['Administrador'] },
     { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
   ];
 

@@ -100,6 +100,24 @@ export default function HomeScreen() {
           router.replace('/config');
           return;
         }
+        // Al abrir por primera vez, sincronizar el valor de la moneda desde el servidor
+        (async () => {
+          try {
+            const host = parsed.api_host || parsed.apihost || parsed.apiHost;
+            const token = parsed.token;
+            if (!host) return;
+            const res = await fetch(`${host}/moneda`, {
+              method: 'GET',
+              headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+            });
+            const data = await res.json();
+            if (data && typeof data.value !== 'undefined') {
+              await AsyncStorage.setItem('@CambioMoneda', String(data.value));
+            }
+          } catch (e) {
+            console.log('No se pudo sincronizar @CambioMoneda:', e);
+          }
+        })();
       } catch (e) {
         console.log('Error leyendo @config:', e);
         router.replace('/config');
