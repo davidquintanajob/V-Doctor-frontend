@@ -843,7 +843,7 @@ export default function ProductosTab() {
 
             <View style={styles.actionsContainer}>
                 <TouchableOpacity style={[styles.addButton, styles.secondaryButton]} onPress={() => {
-                    router.push({ pathname: '/productoEntrada' });
+                    router.push('/addEntrada?tipo=producto');
                 }}>
                     <Text style={styles.addButtonText}>Agregar Entrada a Producto</Text>
                 </TouchableOpacity>

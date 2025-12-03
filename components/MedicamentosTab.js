@@ -841,7 +841,7 @@ export default function MedicamentosTab() {
             <View style={[styles.actionsContainer, { marginTop: Spacing.s }]}>
                 <TouchableOpacity
                     style={styles.secondaryButton}
-                    onPress={() => router.push('/medicamentoModal?mode=entrada')}
+                    onPress={() => router.push('/addEntrada?tipo=medicamento')}
                 >
                     <Text style={styles.addButtonText}>Agregar Entrada</Text>
                 </TouchableOpacity>
