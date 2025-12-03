@@ -11,41 +11,58 @@ import {
     Alert,
     KeyboardAvoidingView,
     Platform,
-    TouchableWithoutFeedback,
-    Keyboard,
     Image
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TopBar from '../components/TopBar';
 import DataTable from '../components/DataTable';
-import DropdownGenerico from '../components/DropdownGenerico';
 import { Colors, Spacing, Typography } from '../variables';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import QRScannerModal from '../components/QRScannerModal';
+import DropdownGenerico from '../components/DropdownGenerico';
 import eventBus from '../utils/eventBus';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-export default function ProductoModalScreen() {
+export default function MedicamentoModalScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
 
     const mode = params.mode; // 'ver' | 'editar' | 'crear'
-    const productoParam = params.producto ? JSON.parse(params.producto) : null;
+    const medicamentoParam = params.medicamento ? JSON.parse(params.medicamento) : null;
 
-    const [productoData, setProductoData] = useState({
-        id_comerciable: productoParam?.id_comerciable || null,
-        nombre: productoParam?.nombre || '',
-        codigo: productoParam?.codigo ? String(productoParam.codigo) : '',
-        costo_usd: productoParam?.costo_usd ? String(productoParam.costo_usd) : '',
-        costo_cup: productoParam?.costo_cup ? String(productoParam.costo_cup) : '',
-        categoria: productoParam?.categoria || '',
-        nota: productoParam?.nota || '',
-        cantidad: productoParam?.cantidad ? String(productoParam.cantidad) : '',
-        precio_usd: productoParam?.comerciable?.precio_usd ? String(productoParam.comerciable.precio_usd) : '',
-        precio_cup: productoParam?.comerciable?.precio_cup ? String(productoParam.comerciable.precio_cup) : ''
+    const [medicamentoData, setMedicamentoData] = useState({
+        id_comerciable: medicamentoParam?.id_comerciable || null,
+        nombre: medicamentoParam?.producto?.nombre || '',
+        codigo: medicamentoParam?.producto?.codigo ? String(medicamentoParam.producto.codigo) : '',
+        tipo_medicamento: medicamentoParam?.tipo_medicamento || '',
+        unidad_medida: medicamentoParam?.unidad_medida || '',
+        posologia: medicamentoParam?.posologia || '',
+        costo_usd: medicamentoParam?.producto?.costo_usd ? String(medicamentoParam.producto.costo_usd) : '',
+        costo_cup: medicamentoParam?.producto?.costo_cup ? String(medicamentoParam.producto.costo_cup) : '',
+        categoria: medicamentoParam?.producto?.categoria || '',
+        nota: medicamentoParam?.producto?.nota || '',
+        cantidad: medicamentoParam?.producto?.cantidad ? String(medicamentoParam.producto.cantidad) : '',
+        precio_usd: medicamentoParam?.producto?.comerciable?.precio_usd ? String(medicamentoParam.producto.comerciable.precio_usd) : '',
+        precio_cup: medicamentoParam?.producto?.comerciable?.precio_cup ? String(medicamentoParam.producto.comerciable.precio_cup) : ''
     });
 
+    const tiposMedicamento = [
+        { id: 1, nombre: "vacuna" },
+        { id: 2, nombre: "antiparasitario" },
+        { id: 3, nombre: "antibiótico" },
+        { id: 4, nombre: "digestivo" },
+        { id: 5, nombre: "vitaminico" },
+        { id: 6, nombre: "anestesico" },
+        { id: 7, nombre: "sedante" },
+        { id: 8, nombre: "crema" },
+        { id: 9, nombre: "oftalmico" },
+        { id: 10, nombre: "otico" },
+        { id: 11, nombre: "energizante" },
+        { id: 12, nombre: "inmuno }estimulante" },
+        { id: 13, nombre: "anticeptico" },
+        { id: 14, nombre: "desinfectante" }
+    ];
     const allRoles = ['Administrador', 'Médico', 'Técnico', 'Estilista'];
     const [rolesSelected, setRolesSelected] = useState([]);
     const [showScannerModal, setShowScannerModal] = useState(false);
@@ -56,27 +73,23 @@ export default function ProductoModalScreen() {
     const itemsPerPage = 10;
     const [isAdmin, setIsAdmin] = useState(false);
 
-    const entradasList = productoParam?.entradas || [];
-    const ventasList = productoParam?.comerciable?.venta || [];
+    const entradasList = medicamentoParam?.producto?.entradas || [];
+    const ventasList = medicamentoParam?.producto?.comerciable?.venta || [];
 
     const isEditable = mode !== 'ver';
 
-    // Inicializar API host
     useEffect(() => {
         const getApiHost = async () => {
             try {
                 const raw = await AsyncStorage.getItem('@config');
                 if (raw) {
                     const config = JSON.parse(raw);
-                    const host = config.api_host || config.apihost || config.apiHost;
-                    // Determine if current user is Administrator
                     try {
                         const user = config.usuario || config.user || {};
                         setIsAdmin((user && user.rol && String(user.rol) === 'Administrador'));
                     } catch (e) {
                         setIsAdmin(false);
                     }
-                    // Cargar cambio de moneda local si existe
                     try {
                         const cambioRaw = await AsyncStorage.getItem('@CambioMoneda');
                         if (cambioRaw) {
@@ -95,96 +108,33 @@ export default function ProductoModalScreen() {
     }, []);
 
     useEffect(() => {
-        // If productoParam changes (when opening in editar/ver), update local state
-        if (productoParam) {
-            setProductoData({
-                id_comerciable: productoParam?.id_comerciable || null,
-                nombre: productoParam?.nombre || '',
-                codigo: productoParam?.codigo ? String(productoParam.codigo) : '',
-                costo_usd: productoParam?.costo_usd ? String(productoParam.costo_usd) : '',
-                costo_cup: productoParam?.costo_cup ? String(productoParam.costo_cup) : '',
-                categoria: productoParam?.categoria || '',
-                nota: productoParam?.nota || '',
-                cantidad: productoParam?.cantidad ? String(productoParam.cantidad) : '',
-                precio_usd: productoParam?.comerciable?.precio_usd ? String(productoParam.comerciable.precio_usd) : '',
-                precio_cup: productoParam?.comerciable?.precio_cup ? String(productoParam.comerciable.precio_cup) : ''
+        if (medicamentoParam) {
+            setMedicamentoData({
+                id_comerciable: medicamentoParam?.id_comerciable || null,
+                nombre: medicamentoParam?.producto?.nombre || '',
+                codigo: medicamentoParam?.producto?.codigo ? String(medicamentoParam.producto.codigo) : '',
+                tipo_medicamento: medicamentoParam?.tipo_medicamento || '',
+                unidad_medida: medicamentoParam?.unidad_medida || '',
+                posologia: medicamentoParam?.posologia || '',
+                costo_usd: medicamentoParam?.producto?.costo_usd ? String(medicamentoParam.producto.costo_usd) : '',
+                costo_cup: medicamentoParam?.producto?.costo_cup ? String(medicamentoParam.producto.costo_cup) : '',
+                categoria: medicamentoParam?.producto?.categoria || '',
+                nota: medicamentoParam?.producto?.nota || '',
+                cantidad: medicamentoParam?.producto?.cantidad ? String(medicamentoParam.producto.cantidad) : '',
+                precio_usd: medicamentoParam?.producto?.comerciable?.precio_usd ? String(medicamentoParam.producto.comerciable.precio_usd) : '',
+                precio_cup: medicamentoParam?.producto?.comerciable?.precio_cup ? String(medicamentoParam.producto.comerciable.precio_cup) : ''
             });
-            // parse roles_autorizados if present
             try {
-                const rolesStr = productoParam?.comerciable?.roles_autorizados || productoParam?.roles_autorizados || '';
+                const rolesStr = medicamentoParam?.producto?.comerciable?.roles_autorizados || medicamentoParam?.roles_autorizados || '';
                 const parsed = String(rolesStr).split(',').map(s => s.trim()).filter(s => s.length > 0);
-                // filter to known roles
                 setRolesSelected(parsed.filter(r => allRoles.includes(r)));
             } catch (e) {
                 setRolesSelected([]);
             }
         }
-    }, [params.producto]);
+    }, [params.medicamento]);
 
-    // Handlers para sincronizar CUP <-> USD usando cambioMoneda
-    const parseNumber = (s) => {
-        if (s === null || typeof s === 'undefined') return null;
-        const n = Number(String(s).replace(/,/g, '.'));
-        return isNaN(n) ? null : n;
-    };
-
-    const handleCostoCUPChange = (t) => {
-        const cleaned = t.replace(/[^0-9\.]/g, '');
-        setProductoData(prev => {
-            let costo_usd = prev.costo_usd;
-            const cup = parseNumber(cleaned);
-            if (cup != null && cambioMoneda && cambioMoneda > 0) {
-                costo_usd = String((cup / cambioMoneda).toFixed(2));
-            } else if (cleaned === '') {
-                costo_usd = '';
-            }
-            return { ...prev, costo_cup: cleaned, costo_usd };
-        });
-    };
-
-    const handleCostoUSDChange = (t) => {
-        const cleaned = t.replace(/[^0-9\.]/g, '');
-        setProductoData(prev => {
-            let costo_cup = prev.costo_cup;
-            const usd = parseNumber(cleaned);
-            if (usd != null && cambioMoneda && cambioMoneda > 0) {
-                costo_cup = String(Math.round((usd * cambioMoneda) * 100) / 100);
-            } else if (cleaned === '') {
-                costo_cup = '';
-            }
-            return { ...prev, costo_usd: cleaned, costo_cup };
-        });
-    };
-
-    const handlePrecioCUPChange = (t) => {
-        const cleaned = t.replace(/[^0-9\.]/g, '');
-        setProductoData(prev => {
-            let precio_usd = prev.precio_usd;
-            const cup = parseNumber(cleaned);
-            if (cup != null && cambioMoneda && cambioMoneda > 0) {
-                precio_usd = String((cup / cambioMoneda).toFixed(2));
-            } else if (cleaned === '') {
-                precio_usd = '';
-            }
-            return { ...prev, precio_cup: cleaned, precio_usd };
-        });
-    };
-
-    const handlePrecioUSDChange = (t) => {
-        const cleaned = t.replace(/[^0-9\.]/g, '');
-        setProductoData(prev => {
-            let precio_cup = prev.precio_cup;
-            const usd = parseNumber(cleaned);
-            if (usd != null && cambioMoneda && cambioMoneda > 0) {
-                precio_cup = String(Math.round((usd * cambioMoneda) * 100) / 100);
-            } else if (cleaned === '') {
-                precio_cup = '';
-            }
-            return { ...prev, precio_usd: cleaned, precio_cup };
-        });
-    };
-
-    // If creating a product, fetch unique code once
+    // If creating a medicamento, fetch unique product code and set it into the codigo field
     useEffect(() => {
         const fetchUniqueCode = async () => {
             if (mode !== 'crear') return;
@@ -203,7 +153,7 @@ export default function ProductoModalScreen() {
                 }
                 const data = await res.json().catch(() => null);
                 if (data && data.code) {
-                    setProductoData(prev => ({ ...prev, codigo: String(data.code) }));
+                    setMedicamentoData(prev => ({ ...prev, codigo: String(data.code) }));
                 }
             } catch (err) {
                 console.error('Error fetching unique-code:', err);
@@ -211,6 +161,68 @@ export default function ProductoModalScreen() {
         };
         fetchUniqueCode();
     }, [mode]);
+
+    const parseNumber = (s) => {
+        if (s === null || typeof s === 'undefined') return null;
+        const n = Number(String(s).replace(/,/g, '.'));
+        return isNaN(n) ? null : n;
+    };
+
+    const handleCostoCUPChange = (t) => {
+        const cleaned = t.replace(/[^0-9\.]/g, '');
+        setMedicamentoData(prev => {
+            let costo_usd = prev.costo_usd;
+            const cup = parseNumber(cleaned);
+            if (cup != null && cambioMoneda && cambioMoneda > 0) {
+                costo_usd = String((cup / cambioMoneda).toFixed(2));
+            } else if (cleaned === '') {
+                costo_usd = '';
+            }
+            return { ...prev, costo_cup: cleaned, costo_usd };
+        });
+    };
+
+    const handleCostoUSDChange = (t) => {
+        const cleaned = t.replace(/[^0-9\.]/g, '');
+        setMedicamentoData(prev => {
+            let costo_cup = prev.costo_cup;
+            const usd = parseNumber(cleaned);
+            if (usd != null && cambioMoneda && cambioMoneda > 0) {
+                costo_cup = String(Math.round((usd * cambioMoneda) * 100) / 100);
+            } else if (cleaned === '') {
+                costo_cup = '';
+            }
+            return { ...prev, costo_usd: cleaned, costo_cup };
+        });
+    };
+
+    const handlePrecioCUPChange = (t) => {
+        const cleaned = t.replace(/[^0-9\.]/g, '');
+        setMedicamentoData(prev => {
+            let precio_usd = prev.precio_usd;
+            const cup = parseNumber(cleaned);
+            if (cup != null && cambioMoneda && cambioMoneda > 0) {
+                precio_usd = String((cup / cambioMoneda).toFixed(2));
+            } else if (cleaned === '') {
+                precio_usd = '';
+            }
+            return { ...prev, precio_cup: cleaned, precio_usd };
+        });
+    };
+
+    const handlePrecioUSDChange = (t) => {
+        const cleaned = t.replace(/[^0-9\.]/g, '');
+        setMedicamentoData(prev => {
+            let precio_cup = prev.precio_cup;
+            const usd = parseNumber(cleaned);
+            if (usd != null && cambioMoneda && cambioMoneda > 0) {
+                precio_cup = String(Math.round((usd * cambioMoneda) * 100) / 100);
+            } else if (cleaned === '') {
+                precio_cup = '';
+            }
+            return { ...prev, precio_usd: cleaned, precio_cup };
+        });
+    };
 
     const handleBack = () => router.back();
 
@@ -231,9 +243,8 @@ export default function ProductoModalScreen() {
                 return;
             }
 
-            // Basic validation
-            if (!productoData.nombre || !productoData.nombre.trim()) {
-                Alert.alert('Error', 'El nombre del producto es requerido');
+            if (!medicamentoData.nombre || !medicamentoData.nombre.trim()) {
+                Alert.alert('Error', 'El nombre del medicamento es requerido');
                 return;
             }
             if (rolesSelected.length === 0) {
@@ -242,36 +253,39 @@ export default function ProductoModalScreen() {
             }
 
             const body = {
-                nombre: productoData.nombre,
-                codigo: productoData.codigo ? Number(productoData.codigo) : null,
-                costo_usd: productoData.costo_usd ? Number(productoData.costo_usd) : 0,
-                costo_cup: productoData.costo_cup ? Number(productoData.costo_cup) : 0,
-                categoria: productoData.categoria,
-                nota: productoData.nota,
-                precio_usd: productoData.precio_usd ? Number(productoData.precio_usd) : 0,
-                precio_cup: productoData.precio_cup ? Number(productoData.precio_cup) : 0,
-                roles_autorizados: rolesSelected.join(', ')
+                nombre: medicamentoData.nombre,
+                codigo: medicamentoData.codigo ? Number(medicamentoData.codigo) : null,
+                costo_usd: medicamentoData.costo_usd ? Number(medicamentoData.costo_usd) : 0,
+                costo_cup: medicamentoData.costo_cup ? Number(medicamentoData.costo_cup) : 0,
+                categoria: medicamentoData.categoria,
+                nota: medicamentoData.nota,
+                precio_usd: medicamentoData.precio_usd ? Number(medicamentoData.precio_usd) : 0,
+                precio_cup: medicamentoData.precio_cup ? Number(medicamentoData.precio_cup) : 0,
+                roles_autorizados: rolesSelected.join(', '),
+                tipo_medicamento: medicamentoData.tipo_medicamento.nombre,
+                unidad_medida: medicamentoData.unidad_medida,
+                posologia: medicamentoData.posologia
             };
 
             const base = host.replace(/\/+$/, '');
             let url;
             let method = 'POST';
             if (mode === 'editar') {
-                const id = productoData.id_comerciable || productoParam?.id_comerciable || productoParam?.id;
+                const id = medicamentoData.id_comerciable || medicamentoParam?.id_comerciable || medicamentoParam?.id;
                 if (!id) {
-                    Alert.alert('Error', 'No se pudo identificar el producto a actualizar');
+                    Alert.alert('Error', 'No se pudo identificar el medicamento a actualizar');
                     return;
                 }
-                url = `${base}/producto/UpdateProducto/${id}`;
+                url = `${base}/medicamento/UpdateMedicamento/${id}`;
                 method = 'PUT';
             } else {
-                url = `${base}/producto/CreateProducto`;
+                url = `${base}/medicamento/CreateMedicamento/`;
                 method = 'POST';
             }
 
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
-
+            
             const res = await fetch(url, {
                 method,
                 headers,
@@ -300,9 +314,9 @@ export default function ProductoModalScreen() {
             }
 
             if (Platform.OS === 'android') {
-                ToastAndroid.show(mode === 'editar' ? 'Producto actualizado' : 'Producto creado', ToastAndroid.SHORT);
+                ToastAndroid.show(mode === 'editar' ? 'Medicamento actualizado' : 'Medicamento creado', ToastAndroid.SHORT);
             } else {
-                Alert.alert('Éxito', mode === 'editar' ? 'Producto actualizado' : 'Producto creado');
+                Alert.alert('Éxito', mode === 'editar' ? 'Medicamento actualizado' : 'Medicamento creado');
             }
 
             try { eventBus.emit('refreshProductosMedicamentos'); } catch (e) { /* ignore */ }
@@ -310,12 +324,10 @@ export default function ProductoModalScreen() {
             router.back();
 
         } catch (error) {
-            console.error('Error guardando producto:', error);
+            console.error('Error guardando medicamento:', error);
             Alert.alert('Error de conexión', 'No se pudo conectar con el servidor');
         }
     };
-
-    // Columns for entradas table
     const entradasColumns = [
         { key: 'fecha', label: 'Fecha', width: 140, cellRenderer: (v) => <Text style={styles.cellText}>{v ? (new Date(v)).toLocaleDateString() : 'N/A'}</Text> },
         { key: 'cantidad', label: 'Cantidad', width: 100, cellRenderer: (v) => <Text style={styles.cellText}>{v ?? '0'}</Text> },
@@ -324,7 +336,6 @@ export default function ProductoModalScreen() {
         { key: 'nombre_proveedor', label: 'Proveedor', width: 180, cellRenderer: (v) => <Text style={styles.cellText}>{v || 'N/A'}</Text> }
     ];
 
-    // Columns for ventas (visual only)
     const ventasColumns = [
         { key: 'fecha', label: 'Fecha', width: 140, cellRenderer: (v) => <Text style={styles.cellText}>{v ? (new Date(v)).toLocaleDateString() : 'N/A'}</Text> },
         { key: 'cantidad', label: 'Cantidad', width: 100, cellRenderer: (v) => <Text style={styles.cellText}>{v ?? '0'}</Text> },
@@ -332,7 +343,6 @@ export default function ProductoModalScreen() {
         { key: 'precio_cobrado_cup', label: 'Precio Cobrado', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v || 'N/A'}</Text> }
     ];
 
-    // Resúmenes calculados
     const entradasSummary = entradasList.reduce((acc, e) => {
         const cantidad = Number(e.cantidad) || 0;
         const costo_cup = e.costo_cup != null ? Number(e.costo_cup) || 0 : 0;
@@ -348,7 +358,6 @@ export default function ProductoModalScreen() {
         const precio_cobrado = v.precio_cobrado_cup != null ? Number(v.precio_cobrado_cup) || 0 : 0;
         const precio_original = v.precio_original_comerciable_cup != null ? Number(v.precio_original_comerciable_cup) || 0 : 0;
         const forma = v.forma_pago || '';
-        // Sumar por unidad: precio * cantidad
         acc.totalCantidad += cantidad;
         acc.totalPrecioCobrado += precio_cobrado * cantidad;
         acc.totalPlus += (precio_cobrado - precio_original) * cantidad;
@@ -368,18 +377,18 @@ export default function ProductoModalScreen() {
                         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                             <Image source={require('../assets/images/arrow-left.png')} style={styles.icon} resizeMode="contain" />
                         </TouchableOpacity>
-                        <Text style={styles.title}>{mode === 'ver' ? 'Detalles de Producto' : mode === 'editar' ? 'Editar Producto' : 'Crear Producto'}</Text>
+                        <Text style={styles.title}>{mode === 'ver' ? 'Detalles de Medicamento' : mode === 'editar' ? 'Editar Medicamento' : 'Crear Medicamento'}</Text>
                     </View>
 
                     <View style={styles.section}>
                         <Text style={styles.label}>Nombre *</Text>
-                        <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.nombre} onChangeText={(t) => setProductoData(prev => ({ ...prev, nombre: t }))} editable={isEditable} placeholder="Nombre del producto" />
+                        <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.nombre} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, nombre: t }))} editable={isEditable} placeholder="Nombre del medicamento" />
 
                         <View style={styles.twoColumnRow}>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Código *</Text>
                                 <View style={styles.codigoInputRow}>
-                                    <TextInput style={[styles.input, styles.codigoInput, !isEditable && styles.disabledInput]} value={productoData.codigo} onChangeText={(t) => setProductoData(prev => ({ ...prev, codigo: t.replace(/[^0-9]/g, '') }))} keyboardType="numeric" editable={isEditable} placeholder="Código" />
+                                    <TextInput style={[styles.input, styles.codigoInput, !isEditable && styles.disabledInput]} value={medicamentoData.codigo} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, codigo: t.replace(/[^0-9]/g, '') }))} keyboardType="numeric" editable={isEditable} placeholder="Código" />
                                     <TouchableOpacity style={styles.cameraButton} onPress={() => setShowScannerModal(true)}>
                                         <Image source={require('../assets/images/camera.png')} style={styles.cameraIcon} />
                                     </TouchableOpacity>
@@ -387,33 +396,56 @@ export default function ProductoModalScreen() {
                             </View>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Categoría *</Text>
-                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.categoria} onChangeText={(t) => setProductoData(prev => ({ ...prev, categoria: t }))} editable={isEditable} placeholder="Categoría" />
+                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.categoria} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, categoria: t }))} editable={isEditable} placeholder="Categoría" />
                             </View>
                         </View>
 
                         <View style={styles.twoColumnRow}>
                             <View style={styles.column}>
+                                <Text style={styles.label}>Tipo de Medicamento *</Text>
+                                <DropdownGenerico
+                                    data={tiposMedicamento}
+                                    value={medicamentoData.tipo_medicamento}
+                                    onValueChange={(t) => setMedicamentoData(prev => ({ ...prev, tipo_medicamento: t }))}
+                                    placeholder="Tip Medicam"
+                                    displayKey="nombre"
+                                    searchKey="nombre"
+                                    disabled={( mode === "ver" )}
+                                />
+                            </View>
+                            <View style={styles.column}>
+                                <Text style={styles.label}>Unidad de Medida *</Text>
+                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.unidad_medida} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, unidad_medida: t }))} editable={isEditable} placeholder="Ej: Tableta" />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Posología</Text>
+                            <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.posologia} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, posologia: t }))} editable={isEditable} placeholder="Ej: 1 tab cada 8 horas" />
+                        </View>
+
+                        <View style={styles.twoColumnRow}>
+                            <View style={styles.column}>
                                 <Text style={styles.label}>Costo USD *</Text>
-                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.costo_usd} onChangeText={handleCostoUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
+                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.costo_usd} onChangeText={handleCostoUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
                             </View>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Costo CUP *</Text>
-                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.costo_cup} onChangeText={handleCostoCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
+                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.costo_cup} onChangeText={handleCostoCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
                             </View>
                         </View>
 
                         <View style={styles.twoColumnRow}>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Precio USD *</Text>
-                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.precio_usd} onChangeText={handlePrecioUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
+                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.precio_usd} onChangeText={handlePrecioUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
                             </View>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Precio CUP *</Text>
-                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.precio_cup} onChangeText={handlePrecioCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
+                                <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.precio_cup} onChangeText={handlePrecioCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
                             </View>
                         </View>
 
-                        {/* Roles autorizados */}
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Roles autorizados *</Text>
                             <View style={styles.rolesRow}>
@@ -440,17 +472,16 @@ export default function ProductoModalScreen() {
 
                         {(mode === "ver" || mode === "editar") && (<View style={styles.inputGroup}>
                             <Text style={styles.label}>Cantidad</Text>
-                            <TextInput style={[styles.input, styles.disabledInput]} value={productoData.cantidad} keyboardType="numeric" editable={false} placeholder="0" />
+                            <TextInput style={[styles.input, styles.disabledInput]} value={medicamentoData.cantidad} keyboardType="numeric" editable={false} placeholder="0" />
                         </View>)}
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Nota</Text>
-                            <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.nota} onChangeText={(t) => setProductoData(prev => ({ ...prev, nota: t }))} editable={isEditable} placeholder="Nota opcional" />
+                            <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.nota} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, nota: t }))} editable={isEditable} placeholder="Nota opcional" />
                         </View>
-
                         {isEditable && (
                             <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                                <Text style={styles.saveButtonText}>{mode === 'editar' ? 'Actualizar Producto' : 'Crear Producto'}</Text>
+                                <Text style={styles.saveButtonText}>{mode === 'editar' ? 'Actualizar Medicamento' : 'Crear Medicamento'}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -468,7 +499,6 @@ export default function ProductoModalScreen() {
                             isLoading={false}
                             onPageChange={(p) => setEntradasPage(p)}
                         />
-                        {/* Información resumen Entradas */}
                         <View style={styles.infoBox}>
                             <View style={styles.infoRow}>
                                 <Text style={styles.infoLabel}>Total cantidad (entradas):</Text>
@@ -498,7 +528,6 @@ export default function ProductoModalScreen() {
                             isLoading={false}
                             onPageChange={(p) => setVentasPage(p)}
                         />
-                        {/* Información resumen Ventas */}
                         <View style={styles.infoBox}>
                             <View style={styles.infoRow}>
                                 <Text style={styles.infoLabel}>Total cantidad (ventas):</Text>
@@ -528,7 +557,7 @@ export default function ProductoModalScreen() {
                     onClose={() => setShowScannerModal(false)}
                     onCodeScanned={(code) => {
                         try {
-                            setProductoData(prev => ({ ...prev, codigo: String(code) }));
+                            setMedicamentoData(prev => ({ ...prev, codigo: String(code) }));
                         } catch (e) {
                             console.log('Error setting scanned code:', e);
                         }
@@ -554,11 +583,10 @@ const styles = StyleSheet.create({
     twoColumnRow: { flexDirection: 'row', gap: Spacing.s, marginBottom: Spacing.s },
     column: { flex: 1 },
     inputGroup: { marginBottom: Spacing.m },
+    sectionTitle: { fontSize: Typography.h4, fontWeight: '700', marginBottom: Spacing.s, color: Colors.textSecondary },
     saveButton: { backgroundColor: Colors.boton_azul, paddingVertical: Spacing.m, paddingHorizontal: Spacing.m, borderRadius: 8, alignItems: 'center', marginTop: Spacing.m, borderWidth: 1, borderColor: '#000' },
     saveButtonText: { color: '#fff', fontSize: Typography.body, fontWeight: '600' },
-    sectionTitle: { fontSize: Typography.h4, fontWeight: '700', marginBottom: Spacing.s, color: Colors.textSecondary },
-    cellText: { fontSize: Typography.small, color: Colors.textSecondary }
-    ,
+    cellText: { fontSize: Typography.small, color: Colors.textSecondary },
     infoBox: {
         backgroundColor: '#fff',
         borderWidth: 1,
@@ -601,8 +629,7 @@ const styles = StyleSheet.create({
         fontSize: Typography.small,
         color: Colors.textSecondary,
         marginTop: Spacing.xs
-    }
-    ,
+    },
     rolesRow: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -631,8 +658,7 @@ const styles = StyleSheet.create({
     },
     disabledRole: {
         opacity: 0.6
-    }
-    ,
+    },
     codigoInputRow: {
         flexDirection: 'row',
         alignItems: 'center',
