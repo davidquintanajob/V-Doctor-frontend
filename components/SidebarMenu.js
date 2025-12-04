@@ -27,7 +27,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
-    { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicioServicioComplejo', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
