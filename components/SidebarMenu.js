@@ -24,16 +24,16 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Definir los items con roles visibles y accesibilidad sin login
   const menuItems = [
-    { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Tareas', icon: require('../assets/images/tasks.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], enDesarrollo: true },
     { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicioServicioComplejo', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
-    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
+    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true, enDesarrollo: true },
+    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], enDesarrollo: true },
+    { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], enDesarrollo: true },
     { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'productosMedicamentos', rolVisible: ["Administrador", "Médico", "Técnico"] },
     { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
-    { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'NoDisponible', rolVisible: ['Administrador'] },
+    { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'NoDisponible', rolVisible: ['Administrador'], enDesarrollo: true },
     { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'cambioMoneda', rolVisible: ['Administrador'] },
     { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
   ];
@@ -104,7 +104,12 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     }).start();
   }, [isOpen]);
 
-  const handleItemPress = async (link, alwaysAccessible = false) => {
+  const handleItemPress = async (link, alwaysAccessible = false, enDesarrollo = false) => {
+    // Si el item está en desarrollo, no hacer nada
+    if (enDesarrollo) {
+      return;
+    }
+
     try {
       // Si el item es siempre accesible, permitir acceso sin verificar login
       if (alwaysAccessible) {
@@ -148,6 +153,8 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Función para determinar si un item está habilitado
   const isItemEnabled = (item) => {
+    // Si está en desarrollo, está deshabilitado
+    if (item.enDesarrollo) return false;
     // Items con alwaysAccessible están siempre habilitados
     if (item.alwaysAccessible) return true;
     // Otros items solo si está logueado
@@ -156,6 +163,8 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Función para determinar la opacidad del item
   const getItemOpacity = (item) => {
+    // Items en desarrollo tienen 50% de opacidad
+    if (item.enDesarrollo) return 0.5;
     // Items con alwaysAccessible siempre opaca completa
     if (item.alwaysAccessible) return 1;
     // Otros items dependen del login
@@ -164,7 +173,13 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Función para obtener el badge apropiado
   const getItemBadge = (item) => {
-    if (item.alwaysAccessible) {
+    if (item.enDesarrollo) {
+      return (
+        <View style={styles.developmentBadge}>
+          <Text style={styles.developmentText}>Pronto</Text>
+        </View>
+      );
+    } else if (item.alwaysAccessible) {
       return (
         <View style={styles.alwaysAccessibleBadge}>
           <Text style={styles.alwaysAccessibleText}>Libre</Text>
@@ -236,7 +251,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
                   opacity: getItemOpacity(item) // Opacidad dinámica
                 }
               ]}
-              onPress={() => handleItemPress(item.link, item.alwaysAccessible)}
+              onPress={() => handleItemPress(item.link, item.alwaysAccessible, item.enDesarrollo)}
               disabled={!isItemEnabled(item)} // Habilitación dinámica
             >
               <Image
@@ -265,7 +280,6 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
   );
 };
 
-// Los estilos se mantienen igual...
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
@@ -368,6 +382,18 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.s,
   },
   alwaysAccessibleText: {
+    color: 'white',
+    fontSize: Typography.small,
+    fontWeight: 'bold',
+  },
+  developmentBadge: {
+    backgroundColor: Colors.warning || '#FFA500', // Color naranja para desarrollo
+    paddingHorizontal: Spacing.s,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginLeft: Spacing.s,
+  },
+  developmentText: {
     color: 'white',
     fontSize: Typography.small,
     fontWeight: 'bold',

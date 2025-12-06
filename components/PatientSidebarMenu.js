@@ -16,7 +16,6 @@ import { Colors, Spacing, Typography } from '../variables';
 import { useRouter } from 'expo-router';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as Application from 'expo-application';
 import { especies } from '../app/pacientes';
 
 const { width } = Dimensions.get('window');
@@ -30,12 +29,11 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
 
     const menuItems = [
         { name: 'Datos del Paciente', icon: require('../assets/images/folder.png'), link: 'pacienteModal' },
-        { name: 'Historia Clínica', icon: require('../assets/images/historial-medico.png'), link: 'NoDisponible' },
-        { name: 'Recetas', icon: require('../assets/images/receta.png'), link: 'NoDisponible' },
-        { name: 'Vacunas', icon: require('../assets/images/inyeccion.png'), link: 'NoDisponible' },
-        { name: 'Antiparasitarios', icon: require('../assets/images/sangre.png'), link: 'NoDisponible' },
-        { name: 'Recordatorios', icon: require('../assets/images/despertador.png'), link: 'NoDisponible' },
-        { name: 'Estetica y Baños', icon: require('../assets/images/bath.png'), link: 'NoDisponible' },
+        { name: 'Historia Clínica', icon: require('../assets/images/historial-medico.png'), link: 'historia_clinica' },
+        { name: 'Vacunas', icon: require('../assets/images/inyeccion.png'), link: 'vacunas' },
+        { name: 'Antiparasitarios', icon: require('../assets/images/sangre.png'), link: 'antiparasitarios' },
+        { name: 'Recordatorios', icon: require('../assets/images/despertador.png'), link: 'recordatorios' },
+        { name: 'Estetica y Baños', icon: require('../assets/images/bath.png'), link: 'estetica_banos' },
     ];
 
     React.useEffect(() => {
@@ -58,8 +56,6 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
         }
 
         try {
-            console.log('🔍 Verificando Epson iPrint...');
-
             // Método 1: Intentar abrir la app directamente
             const epsonUrls = [
                 'epsoniprint://',
@@ -75,7 +71,6 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
                 try {
                     const canOpen = await Linking.canOpenURL(url);
                     if (canOpen) {
-                        console.log(`✅ Epson iPrint detectado con URL: ${url}`);
                         isInstalled = true;
                         break;
                     }
@@ -86,7 +81,6 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
 
             // Método 2: Si ningún URL funciona, asumir que está instalado pero usar método alternativo
             if (!isInstalled) {
-                console.log('⚠️ No se pudo detectar Epson iPrint con URLs, usando método alternativo');
                 // En lugar de marcar como no instalado, usamos un enfoque optimista
                 // Muchas veces la app SÍ está instalada pero canOpenURL no la detecta
                 setEpsonIPrintStatus('likely_installed');
