@@ -45,6 +45,13 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Permite a $(PRODUCT_NAME) usar el micrófono para dictar notas clínicas.",
+          "speechRecognitionPermission": "Permite a $(PRODUCT_NAME) usar el reconocimiento de voz para transcribir audio."
+        }
       ]
     ]
   }

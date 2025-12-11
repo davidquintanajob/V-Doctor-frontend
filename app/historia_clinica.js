@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import PatientSidebarMenu from '../components/PatientSidebarMenu';
 import TopBar from '../components/TopBar';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 export default function HistoriaClinicaScreen() {
     const router = useRouter();
@@ -41,6 +42,11 @@ export default function HistoriaClinicaScreen() {
         fecha_hasta: '',
         descripcion: ''
     });
+    
+    // Estados para los DatePickers
+    const [showDatePickerDesde, setShowDatePickerDesde] = useState(false);
+    const [showDatePickerHasta, setShowDatePickerHasta] = useState(false);
+    
     const [currentPage, setCurrentPage] = useState(1);
     const [totalItems, setTotalItems] = useState(0);
     const itemsPerPage = 10;
@@ -57,6 +63,33 @@ export default function HistoriaClinicaScreen() {
     const handleMenuNavigate = (link) => {
         console.log('Navegando a:', link);
     };
+    
+    // Función para manejar el cambio de fecha en DateTimePicker
+    const handleDateChangeDesde = (event, selectedDate) => {
+        setShowDatePickerDesde(false);
+        if (selectedDate) {
+            const formattedDate = formatDateToYMD(selectedDate);
+            setFilters(prev => ({ ...prev, fecha_desde: formattedDate }));
+        }
+    };
+
+    const handleDateChangeHasta = (event, selectedDate) => {
+        setShowDatePickerHasta(false);
+        if (selectedDate) {
+            const formattedDate = formatDateToYMD(selectedDate);
+            setFilters(prev => ({ ...prev, fecha_hasta: formattedDate }));
+        }
+    };
+
+    // Función para limpiar una fecha específica
+    const clearFechaDesde = () => {
+        setFilters(prev => ({ ...prev, fecha_desde: '' }));
+    };
+
+    const clearFechaHasta = () => {
+        setFilters(prev => ({ ...prev, fecha_hasta: '' }));
+    };
+
     useEffect(() => {
         if (pacienteParam && pacienteParam.fecha_nacimiento) {
             // intentar rellenar años/meses a partir de la fecha
@@ -300,14 +333,97 @@ export default function HistoriaClinicaScreen() {
                             </View>
 
                             <View style={styles.inputGroup}>
+                                {/* Fecha Desde con DateTimePicker */}
                                 <Text style={styles.inputLabel}>Fecha desde</Text>
-                                <TextInput style={[styles.additionalInput]} placeholder="YYYY-MM-DD" value={filters.fecha_desde} onChangeText={(v) => setFilters(prev => ({ ...prev, fecha_desde: v }))} placeholderTextColor="#999" />
+                                <View style={styles.dateInputContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.dateInput, styles.datePickerTouchable]}
+                                        onPress={() => setShowDatePickerDesde(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={{ color: filters.fecha_desde ? Colors.textSecondary : '#999' }}>
+                                            {filters.fecha_desde || 'YYYY-MM-DD'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    
+                                    {filters.fecha_desde ? (
+                                        <TouchableOpacity 
+                                            style={styles.clearDateButton}
+                                            onPress={clearFechaDesde}
+                                        >
+                                            <Image 
+                                                source={require('../assets/images/basura.png')} 
+                                                style={styles.clearDateIcon} 
+                                                resizeMode="contain" 
+                                            />
+                                        </TouchableOpacity>
+                                    ) : null}
+                                </View>
+
+                                {showDatePickerDesde && (
+                                    <DateTimePicker
+                                        value={filters.fecha_desde ? new Date(filters.fecha_desde) : new Date()}
+                                        mode="date"
+                                        display="default"
+                                        maximumDate={new Date()}
+                                        onChange={handleDateChangeDesde}
+                                    />
+                                )}
+
                                 <View style={{ height: Spacing.s }} />
+                                
+                                {/* Fecha Hasta con DateTimePicker */}
                                 <Text style={styles.inputLabel}>Fecha hasta</Text>
-                                <TextInput style={[styles.additionalInput]} placeholder="YYYY-MM-DD" value={filters.fecha_hasta} onChangeText={(v) => setFilters(prev => ({ ...prev, fecha_hasta: v }))} placeholderTextColor="#999" />
+                                <View style={styles.dateInputContainer}>
+                                    <TouchableOpacity
+                                        style={[styles.dateInput, styles.datePickerTouchable]}
+                                        onPress={() => setShowDatePickerHasta(true)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={{ color: filters.fecha_hasta ? Colors.textSecondary : '#999' }}>
+                                            {filters.fecha_hasta || 'YYYY-MM-DD'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    
+                                    {filters.fecha_hasta ? (
+                                        <TouchableOpacity 
+                                            style={styles.clearDateButton}
+                                            onPress={clearFechaHasta}
+                                        >
+                                            <Image 
+                                                source={require('../assets/images/basura.png')} 
+                                                style={styles.clearDateIcon} 
+                                                resizeMode="contain" 
+                                            />
+                                        </TouchableOpacity>
+                                    ) : null}
+                                </View>
+
+                                {showDatePickerHasta && (
+                                    <DateTimePicker
+                                        value={filters.fecha_hasta ? new Date(filters.fecha_hasta) : new Date()}
+                                        mode="date"
+                                        display="default"
+                                        maximumDate={new Date()}
+                                        onChange={handleDateChangeHasta}
+                                    />
+                                )}
                             </View>
 
-                            <TouchableOpacity style={styles.clearButton} onPress={() => { setMotivoSearch(''); setFilters({ diagnostico: '', anamnesis: '', tratamiento: '', patologia: '', fecha_desde: '', fecha_hasta: '', descripcion: '' }); }}>
+                            <TouchableOpacity style={styles.clearButton} onPress={() => { 
+                                setMotivoSearch(''); 
+                                setFilters({ 
+                                    diagnostico: '', 
+                                    anamnesis: '', 
+                                    tratamiento: '', 
+                                    patologia: '', 
+                                    fecha_desde: '', 
+                                    fecha_hasta: '', 
+                                    descripcion: '' 
+                                }); 
+                                setShowDatePickerDesde(false);
+                                setShowDatePickerHasta(false);
+                            }}>
                                 <Text style={styles.clearButtonText}>Limpiar Filtros</Text>
                             </TouchableOpacity>
                         </View>
@@ -326,7 +442,7 @@ export default function HistoriaClinicaScreen() {
                 </View>
 
                 {/* Botón ancho + Agregar historiaClinica */}
-                <TouchableOpacity style={styles.saveButton} onPress={() => { }}>
+                <TouchableOpacity style={styles.saveButton} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'crear', paciente: JSON.stringify(pacienteParam || {}) } }) }>
                     <Text style={styles.saveButtonText}>+ Agregar Consulta</Text>
                 </TouchableOpacity>
 
@@ -354,7 +470,7 @@ export default function HistoriaClinicaScreen() {
                             }
 
                             return (
-                                <TouchableOpacity key={c.id ?? idx} style={styles.pacienteItem} activeOpacity={0.8} onPress={() => router.push({ pathname: '/consultaModal', params: { mode: 'ver', consulta: JSON.stringify(c) } })}>
+                                <TouchableOpacity key={c.id ?? idx} style={styles.pacienteItem} activeOpacity={0.8} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'ver', consulta: JSON.stringify(c) } })}>
                                     <View style={styles.pacienteInfo}>
                                         <Text style={styles.pacienteName}>{c.motivo}</Text>
                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Usuario:</Text> {formatDateForDisplay(c.usuario.nombre_natural)}</Text>
@@ -364,7 +480,7 @@ export default function HistoriaClinicaScreen() {
                                     </View>
 
                                     <View style={{ flexDirection: 'column', padding: Spacing.s }}>
-                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_azul, marginBottom: Spacing.s }]} onPress={() => router.push({ pathname: '/consultaModal', params: { mode: 'editar', consulta: JSON.stringify(c) } })}>
+                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_azul, marginBottom: Spacing.s }]} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'editar', consulta: JSON.stringify(c) } })}>
                                             <Image source={require('../assets/images/editar.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
                                         </TouchableOpacity>
 
@@ -477,6 +593,42 @@ const styles = StyleSheet.create({
     additionalRow: { flexDirection: 'row', gap: Spacing.s, marginBottom: Spacing.m, flexWrap: 'wrap' },
     additionalInput: { backgroundColor: '#fff', borderWidth: 1, borderColor: Colors.primarySuave, borderRadius: 8, paddingHorizontal: Spacing.m, paddingVertical: Spacing.s, fontSize: Typography.body, color: Colors.textSecondary, minHeight: 44, width: '100%' },
     responsiveInputGroup: { flex: 1, minWidth: 0 },
+    
+    // Nuevos estilos para los DatePickers
+    dateInputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    dateInput: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: Colors.primarySuave,
+        borderRadius: 8,
+        paddingHorizontal: Spacing.m,
+        paddingVertical: Spacing.s,
+        fontSize: Typography.body,
+        color: Colors.textSecondary,
+        minHeight: 44,
+        flex: 1,
+        justifyContent: 'center',
+    },
+    datePickerTouchable: {
+        // Estilo para el touchable
+    },
+    clearDateButton: {
+        position: 'absolute',
+        right: 10,
+        height: '100%',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+    },
+    clearDateIcon: {
+        width: 16,
+        height: 16,
+        tintColor: Colors.textSecondary,
+    },
+    
     pacienteItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#000', borderRadius: 8, marginBottom: Spacing.s, overflow: 'hidden', position: 'relative', minHeight: 110 },
     pacienteImage: { width: 70, height: 70, borderRadius: 110 / 2, marginLeft: 8, marginRight: 8, borderWidth: 1, borderColor: '#ddd' },
     pacienteInfo: { flex: 1, padding: Spacing.s },

@@ -2660,10 +2660,10 @@ expo-asset@~12.0.9:
     "@expo/image-utils" "^0.8.7"
     expo-constants "~18.0.9"
 
-expo-av@^16.0.7:
-  version "16.0.7"
-  resolved "https://registry.yarnpkg.com/expo-av/-/expo-av-16.0.7.tgz#51668b335e3a460ca712a281d7138341119ebe26"
-  integrity sha512-QReef6/RYuZ4GekTcZZw5zY26pcPOmHqK6LMgFlPhnsT0ga97HJrgMc63pvIiojDP+q4oIv24g+QPD8ljZu4XQ==
+expo-av@~16.0.8:
+  version "16.0.8"
+  resolved "https://registry.yarnpkg.com/expo-av/-/expo-av-16.0.8.tgz#b1671127f3b2ecaeb9c69fc2301cf791d4504dd6"
+  integrity sha512-cmVPftGR/ca7XBgs7R6ky36lF3OC0/MM/lpgX/yXqfv0jASTsh7AYX9JxHCwFmF+Z6JEB1vne9FDx4GiLcGreQ==
 
 expo-build-properties@^1.0.9:
   version "1.0.9"
@@ -2791,6 +2791,11 @@ expo-sharing@^14.0.7:
   version "14.0.7"
   resolved "https://registry.yarnpkg.com/expo-sharing/-/expo-sharing-14.0.7.tgz#64845ea569c725a9a32705be7ef772e556134e1c"
   integrity sha512-t/5tR8ZJNH6tMkHXlF7453UafNIfrpfTG+THN9EMLC4Wsi4bJuESPm3NdmWDg2D4LDALJI/LQo0iEnLAd5Sp4g==
+
+expo-speech-recognition@^3.0.1:
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/expo-speech-recognition/-/expo-speech-recognition-3.0.1.tgz#7d2f291fafca1f2ff2d3253c11bbd81742250c75"
+  integrity sha512-sMyOE1Vq1635B2oG0irgv6MZo0axIva3yNMmy86fwSqcFI+y9GhfOqZnYx3PFq7A0tNP2AlaNZLA9+tkgBcLhQ==
 
 expo-sqlite@~16.0.9:
   version "16.0.9"
@@ -4517,6 +4522,11 @@ react-native-sqlite-storage@^6.0.1:
   version "6.0.1"
   resolved "https://registry.yarnpkg.com/react-native-sqlite-storage/-/react-native-sqlite-storage-6.0.1.tgz#ce6a6b852f07abbea68658d5363818c8bef45dfb"
   integrity sha512-1tDFjrint6X6qSYKf3gDyz+XB+X79jfiL6xTugKHPRtF0WvqMtVgdLuNqZunIXjNEvNtNVEbXaeZ6MsguFu00A==
+
+react-native-vosk@^2.1.7:
+  version "2.1.7"
+  resolved "https://registry.yarnpkg.com/react-native-vosk/-/react-native-vosk-2.1.7.tgz#c122512f60c9c73cd64861d6f5cc16c5e701d445"
+  integrity sha512-3nBxUzzIgOt+YaR0gYy3TSwZJQoIkCKjrFRDLJJF0RJtohZRsKwZy2UqW7Myc0InihvX9OiB3hrYSrFpiGr5VA==
 
 react-native-web@^0.21.0:
   version "0.21.2"

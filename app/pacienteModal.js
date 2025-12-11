@@ -602,12 +602,12 @@ export default function PacienteModalScreen() {
 
                                 {(mode !== "crear") && (
                                     <TouchableOpacity onPress={() => setShowPatientMenu(true)} style={styles.menuButton}>
-                                    <Image
-                                        source={require('../assets/images/menu.png')}
-                                        style={styles.icon}
-                                        resizeMode="contain"
-                                    />
-                                </TouchableOpacity>
+                                        <Image
+                                            source={require('../assets/images/menu.png')}
+                                            style={styles.icon}
+                                            resizeMode="contain"
+                                        />
+                                    </TouchableOpacity>
                                 )}
 
                                 <Text style={styles.sectionTitle}>
@@ -769,7 +769,11 @@ export default function PacienteModalScreen() {
                                 <TextInput
                                     style={[styles.input, isView && styles.disabledInput]}
                                     value={descuento}
-                                    onChangeText={(text) => setDescuento(clampDescuento(text.replace(/[^0-9]/g, '')))}
+                                    onChangeText={(text) => {
+                                        const valor = clampDescuento(text.replace(/[^0-9]/g, ''));
+                                        setDescuento(valor);
+                                        setPacienteData(prev => ({ ...prev, descuento: Number(valor) || 0 }));
+                                    }}
                                     placeholder="0"
                                     placeholderTextColor="#999"
                                     keyboardType="numeric"

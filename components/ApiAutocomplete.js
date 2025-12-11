@@ -118,6 +118,8 @@ const ApiAutocomplete = ({
     };
   }, [query, delay]);
 
+  
+
   const handleItemSelect = (item) => {
     setSelectedItem(item);
     setQuery(displayFormat ? displayFormat(item) : item[displayKey]);
