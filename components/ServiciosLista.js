@@ -6,6 +6,7 @@ import ApiAutocomplete from './ApiAutocomplete';
 const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
     const [items, setItems] = useState(initial.map((v, i) => ({ id: `${Date.now()}_${i}`, ...v })) || []);
 
+    // Calcular totales desde items
     const computeTotalsFromItems = (itemsArr) => {
         let totalCobrar = 0;
         let totalProfit = 0;
@@ -13,7 +14,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
             if (item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                const cost = parseFloat(item.selected.costo_cup || '0') || 0;
+                const cost = parseFloat(item.selected?.comerciable?.precio_cup || '0') || 0;
                 totalCobrar += price * qty;
                 totalProfit += (price * qty) - (cost * qty);
             }
@@ -24,7 +25,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         };
     };
 
-    // Exponer items mediante el ref
+    // Exponer items y totales mediante el ref
     useImperativeHandle(ref, () => ({
         items: items,
         getItems: () => items,
@@ -34,7 +35,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
     // Notificar cambios al padre cuando items cambian
     React.useEffect(() => {
         if (typeof onChange === 'function') {
-            onChange(computeTotalsFromItems(items), items);
+            onChange(computeTotalsFromItems(items));
         }
     }, [items]);
 
@@ -42,9 +43,6 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         setItems(prev => ([...prev, {
             id: `${Date.now()}_${prev.length}`,
             selected: null,
-            unidad_medida: '',
-            categoria: '',
-            posologia: '',
             precio_cup: '',
             cantidad: '1'
         }]));
@@ -59,17 +57,11 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
     };
 
     const handleSelect = (id, item) => {
-        const precio = item?.precio_cup ?? '';
-        const unidad = item?.unidad_medida ?? '';
-        const categoria = item?.categoria ?? '';
-        const posologia = item?.descripcion ?? '';
+        const precio = item?.comerciable?.precio_cup ?? '';
 
         setItems(prev => prev.map(v => v.id === id ? ({
             ...v,
             selected: item,
-            unidad_medida: unidad,
-            categoria: categoria,
-            posologia: posologia,
             precio_cup: precio?.toString() ?? '',
             cantidad: v.cantidad || '1'
         }) : v));
@@ -98,41 +90,16 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                         <View style={styles.autocompleteContainer}>
                             <ApiAutocomplete
                                 endpoint="/servicio/filter/5/1"
-                                body={{ nombre: '' }}
-                                displayFormat={(it) => `${it.nombre || ''} - ${it.categoria || ''} - $ ${it.precio_cup ?? ''}`}
+                                // Pasamos descripcion en el body y le indicamos a ApiAutocomplete
+                                // que use la clave 'descripcion' como campo de búsqueda.
+                                body={{ descripcion: '' }}
+                                searchKey={'descripcion'}
+                                displayFormat={(it) => `${it.descripcion || ''} - $ ${it.comerciable?.precio_cup ?? ''}`}
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar servicio..."
                                 delay={400}
                             />
                         </View>
-
-                        <View style={styles.inputsRow}>
-                            <TextInput
-                                style={[styles.input, styles.readonlyInput]}
-                                value={entry.unidad_medida}
-                                editable={false}
-                                placeholderTextColor="#999"
-                                placeholder="Unidad"
-                            />
-                            <TextInput
-                                style={[styles.input, styles.readonlyInput]}
-                                value={entry.categoria}
-                                editable={false}
-                                placeholderTextColor="#999"
-                                placeholder="Categoría"
-                            />
-                        </View>
-
-                        <TextInput
-                            style={[styles.input, styles.largeInput, styles.readonlyInput]}
-                            value={entry.posologia}
-                            editable={false}
-                            placeholderTextColor="#999"
-                            placeholder="Descripción"
-                            multiline
-                            numberOfLines={2}
-                            textAlignVertical="top"
-                        />
 
                         <View style={styles.inputsRow}>
                             <TextInput
@@ -158,15 +125,6 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                         {entry.selected && (
                             <View style={{ marginTop: Spacing.s }}>
                                 <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.xs }}>
-                                    Cantidad restante después de la venta: {(() => {
-                                        const exist = parseFloat(entry.selected.cantidad ?? 0);
-                                        const qty = parseFloat(entry.cantidad || '0');
-                                        const rem = exist - qty;
-                                        return isNaN(rem) ? '0' : rem;
-                                    })()}
-                                </Text>
-
-                                <Text style={{ color: Colors.textSecondary, marginBottom: Spacing.xs }}>
                                     Total a cobrar: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
@@ -179,7 +137,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        const cost = parseFloat(entry.selected.costo_cup || '0');
+                                        const cost = parseFloat(entry.selected?.comerciable?.precio_cup || '0');
                                         const profit = (price * qty) - (cost * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}

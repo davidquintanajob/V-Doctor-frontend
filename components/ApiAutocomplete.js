@@ -17,6 +17,9 @@ import { Colors, Spacing, Typography } from '../variables';
 const ApiAutocomplete = ({
   endpoint,
   body = {},
+  // `searchKey` indica qué propiedad del body debe ser reemplazada
+  // por la cadena que escribe el usuario. Por defecto sigue siendo 'nombre'
+  searchKey = 'nombre',
   displayKey = 'nombre',
   displayFormat,
   onItemSelect,
@@ -61,10 +64,12 @@ const ApiAutocomplete = ({
       // Construir la URL completa
       const url = `${host.replace(/\/+$/, '')}${endpoint}`;
 
-      // Combinar el body base con la query de búsqueda
+      // Combinar el body base con la query de búsqueda.
+      // Usamos `searchKey` para que el componente pueda enviar la query
+      // bajo la clave que el endpoint espere (p. ej. 'descripcion').
       const requestBody = {
         ...body,
-        nombre: searchQuery, // Puedes ajustar esto según lo que espere tu API
+        [searchKey]: searchQuery,
       };
 
       const response = await fetch(url, {

@@ -19,9 +19,11 @@ import AntiparasitariosLista from '../components/AntiparasitariosLista';
 import MedicamentosLista from '../components/MedicamentosLista';
 import ServiciosLista from '../components/ServiciosLista';
 import ProductosList from '../components/ProductosList';
+import UsuariosLista from '../components/UsuariosLista';
 import { Colors, Spacing, Typography } from '../variables';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import Modal from 'react-native/Libraries/Modal/Modal';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -34,6 +36,7 @@ export default function HistoriaClinicaModalScreen() {
     const mode = params.mode; // 'crear' | 'editar' | 'ver'
     const consultaParam = params.consulta ? JSON.parse(params.consulta) : null;
     const pacienteParam = params.paciente ? JSON.parse(params.paciente) : null;
+    const [cambioMoneda, setCambioMoneda] = useState(null);
 
     const isView = mode === 'ver';
     const isEditable = mode !== 'ver';
@@ -51,8 +54,6 @@ export default function HistoriaClinicaModalScreen() {
         id_usuario: consultaParam?.id_usuario ?? null,
     });
 
-    const [fotosConsulta, setFotosConsulta] = useState(consultaParam?.foto_consulta ?? []);
-    const [showFotos, setShowFotos] = useState(false);
     const [apiHost, setApiHost] = useState('');
     const [token, setToken] = useState(null);
     const [showDatePicker, setShowDatePicker] = useState(false);
@@ -89,6 +90,11 @@ export default function HistoriaClinicaModalScreen() {
     const medicamentosListRef = React.useRef(null);
     const productosListRef = React.useRef(null);
     const serviciosListRef = React.useRef(null);
+    const usuariosListRef = React.useRef(null);
+
+    // Scroll + posiciones para validación y scroll automático
+    const scrollRef = React.useRef(null);
+    const positionsRef = React.useRef({});
 
     // Estado para datos del paciente (descuento)
     const [pacienteData, setPacienteData] = useState(null);
@@ -100,10 +106,21 @@ export default function HistoriaClinicaModalScreen() {
         medicamentos: { totalCobrar: 0, totalProfit: 0 },
         productos: { totalCobrar: 0, totalProfit: 0 },
         servicios: { totalCobrar: 0, totalProfit: 0 },
+        usuarios: { totalCobrar: 0, totalProfit: 0 },
     });
 
     // Tipo de pago: 'efectivo' (default) | 'transferencia'
     const [paymentType, setPaymentType] = useState('efectivo');
+
+    // Usuarios (cargados al abrir el modal)
+    const [usuariosDisponibles, setUsuariosDisponibles] = useState([]);
+    const [usuariosLoading, setUsuariosLoading] = useState(false);
+    const [usuariosPreseleccionados, setUsuariosPreseleccionados] = useState([]);
+
+    // Validación/progreso al crear/editar consulta
+    const [validationVisible, setValidationVisible] = useState(false);
+    const [validationProgress, setValidationProgress] = useState(0);
+    const [validationTitle, setValidationTitle] = useState('');
 
     // (List states removed)
 
@@ -118,12 +135,75 @@ export default function HistoriaClinicaModalScreen() {
                     setApiHost(host);
                     setToken(config.token || null);
                 }
+                // Cargar cambio de moneda local si existe
+                try {
+                    const cambioRaw = await AsyncStorage.getItem('@CambioMoneda');
+                    if (cambioRaw) {
+                        const num = Number(String(cambioRaw).replace(/,/g, '.'));
+                        if (!isNaN(num) && num > 0) setCambioMoneda(num);
+                    }
+                } catch (e) {
+                    console.log('Error reading @CambioMoneda:', e);
+                }
             } catch (error) {
                 console.error('Error getting config:', error);
             }
         };
         getConfig();
     }, []);
+
+    // Cargar usuarios al abrir el modal (bloqueante hasta recibir respuesta)
+    useEffect(() => {
+        const fetchUsuarios = async () => {
+            if (!apiHost) return;
+            setUsuariosLoading(true);
+            try {
+                const url = `${apiHost}/usuario`;
+                const headers = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const res = await fetch(url, { headers });
+                const text = await res.text();
+                let json;
+                try { json = JSON.parse(text); } catch (e) { console.error('Invalid JSON /usuario response', text); json = null; }
+
+                if (!res.ok || !json) {
+                    Alert.alert('Error', `No se pudieron cargar los usuarios`);
+                    setUsuariosDisponibles([]);
+                    setUsuariosPreseleccionados([]);
+                    return;
+                }
+
+                setUsuariosDisponibles(json);
+
+                // Revisar config de usuario para preseleccionar si aplica
+                try {
+                    // Try both keys: older code may have stored @config.userConfig, but login stores @config
+                    let rawUserCfg = await AsyncStorage.getItem('@config.userConfig');
+                    if (!rawUserCfg) rawUserCfg = await AsyncStorage.getItem('@config');
+                    if (rawUserCfg) {
+                        const userCfg = JSON.parse(rawUserCfg);
+                        const currentId = userCfg?.usuario?.id_usuario || userCfg?.usuario?.idUsuario || null;
+                        if (currentId) {
+                            const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
+                            if (found) {
+                                setUsuariosPreseleccionados([found]);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error reading config from AsyncStorage', err);
+                }
+            } catch (error) {
+                console.error('Error fetching usuarios:', error);
+                Alert.alert('Error', 'Fallo al cargar usuarios');
+            } finally {
+                setUsuariosLoading(false);
+            }
+        };
+
+        fetchUsuarios();
+    }, [apiHost, token]);
 
     // Limpiar temporizadores al desmontar
     useEffect(() => {
@@ -152,13 +232,6 @@ export default function HistoriaClinicaModalScreen() {
 
     const handleChange = (field, value) => {
         setConsultaData(prev => ({ ...prev, [field]: value }));
-    };
-
-    const buildFotoUrl = (ruta) => {
-        if (!ruta) return '';
-        let path = ruta.replace(/\\/g, '/');
-        if (!path.startsWith('/')) path = '/' + path;
-        return `${apiHost}${path}`;
     };
 
     // Funciones genéricas para gestionar listas
@@ -227,7 +300,7 @@ export default function HistoriaClinicaModalScreen() {
                     case 'tratamiento':
                         setRecordingTimeTratamiento(prev => prev + 1);
                         break;
-                case 'patologia':
+                    case 'patologia':
                         setRecordingTimePatologia(prev => prev + 1);
                         break;
                 }
@@ -478,11 +551,439 @@ export default function HistoriaClinicaModalScreen() {
     };
 
     const handleSave = async () => {
-        if (!consultaData.motivo.trim()) {
-            ToastAndroid.show('El motivo es requerido', ToastAndroid.SHORT);
+        // Validaciones antes de guardar: fecha, motivo, anamnesis y al menos un usuario
+        if (!consultaData.fecha || !String(consultaData.fecha).trim()) {
+            ToastAndroid.show('La fecha es requerida', ToastAndroid.SHORT);
+            if (positionsRef.current.fecha && scrollRef.current) scrollRef.current.scrollTo({ y: Math.max(positionsRef.current.fecha - 10, 0), animated: true });
             return;
         }
 
+        if (!consultaData.motivo || !String(consultaData.motivo).trim()) {
+            ToastAndroid.show('El motivo de la visita es requerido', ToastAndroid.SHORT);
+            if (positionsRef.current.motivo && scrollRef.current) scrollRef.current.scrollTo({ y: Math.max(positionsRef.current.motivo - 10, 0), animated: true });
+            return;
+        }
+
+        if (!consultaData.anamnesis || !String(consultaData.anamnesis).trim()) {
+            ToastAndroid.show('La anamnesis es requerida', ToastAndroid.SHORT);
+            if (positionsRef.current.anamnesis && scrollRef.current) scrollRef.current.scrollTo({ y: Math.max(positionsRef.current.anamnesis - 10, 0), animated: true });
+            return;
+        }
+
+        // al menos un usuario asignado
+        let usuariosSeleccionados = [];
+        try {
+            if (usuariosListRef.current && typeof usuariosListRef.current.getItems === 'function') {
+                usuariosSeleccionados = usuariosListRef.current.getItems() || [];
+            }
+        } catch (err) { usuariosSeleccionados = []; }
+
+        if (!usuariosSeleccionados || usuariosSeleccionados.length === 0) {
+            ToastAndroid.show('Debe asignar al menos un usuario', ToastAndroid.SHORT);
+            if (positionsRef.current.usuarios && scrollRef.current) scrollRef.current.scrollTo({ y: Math.max(positionsRef.current.usuarios - 10, 0), animated: true });
+            return;
+        }
+
+        // Llamar a la función específica según el modo
+        if (mode === 'editar') {
+            await handleUpdate();
+        } else {
+            await handleCreate();
+        }
+    };
+
+    // Función que valida ventas de medicamentos usando /venta/validate
+    const validateMedicamentos = async (cfgHost, cfgToken, usuariosIds) => {
+        try {
+            const meds = (medicamentosListRef.current && typeof medicamentosListRef.current.getItems === 'function')
+                ? (medicamentosListRef.current.getItems() || [])
+                : [];
+
+            if (!meds || meds.length === 0) return { ok: true };
+
+            setValidationVisible(true);
+            setValidationProgress(0);
+            setValidationTitle('Validando medicamentos...');
+
+            const total = meds.length;
+            let done = 0;
+
+            for (let i = 0; i < meds.length; i++) {
+                const entry = meds[i];
+                // entry.selected holds the medicamento object as from API
+                const sel = entry.selected || {};
+                const producto = sel.producto || {};
+                const comerciable = producto.comerciable || {};
+
+                const body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+
+                setValidationTitle(`Validando medicamentos`);
+
+                const url = `${cfgHost.replace(/\/+$/, '')}/venta/validate`;
+                const headers = { 'Content-Type': 'application/json' };
+                if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
+
+                const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+                let responseData = null;
+                try { responseData = await res.json(); } catch (e) { responseData = null; }
+
+                if (!res.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                        errorMessage = responseData.errors.join('\n• ');
+                    } else if (responseData && typeof responseData.error === 'string') {
+                        errorMessage = responseData.error;
+                    } else if (responseData && (responseData.message || responseData.description)) {
+                        errorMessage = responseData.message || responseData.description;
+                    } else if (responseData) {
+                        errorMessage = JSON.stringify(responseData);
+                    }
+                    Alert.alert(`Error ${res.status}`, errorMessage);
+                    setValidationVisible(false);
+                    return { ok: false, error: errorMessage };
+                }
+
+                // Avanzar progreso
+                done++;
+                const pct = Math.round((done / total) * 90); // reservamos últimos 10% para creación
+                setValidationProgress(pct);
+            }
+
+            // Si llegamos aquí, validaciones de medicamentos pasaron
+            setValidationProgress(95);
+            setValidationTitle('Validación de medicamentos completada');
+            return { ok: true };
+        } catch (err) {
+            console.error('Error en validateMedicamentos:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
+            return { ok: false, error: err.message };
+        }
+    };
+
+    // Función que valida ventas de servicios usando /venta/validate
+    const validateServicios = async (cfgHost, cfgToken, usuariosIds) => {
+        try {
+            const servicios = (serviciosListRef.current && typeof serviciosListRef.current.getItems === 'function')
+                ? (serviciosListRef.current.getItems() || [])
+                : [];
+
+            if (!servicios || servicios.length === 0) return { ok: true };
+
+            // Mostrar modal si no estaba visible
+            setValidationVisible(true);
+            // Empezar desde el progreso actual o desde 95 si es 0
+            const base = Math.max(validationProgress, 95);
+            setValidationProgress(base);
+            setValidationTitle('Validando servicios...');
+
+            const total = servicios.length;
+            let done = 0;
+
+            for (let i = 0; i < servicios.length; i++) {
+                const entry = servicios[i];
+                const sel = entry.selected || entry || {};
+                const comerciable = sel.comerciable || {};
+
+                const body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+
+                setValidationTitle(`Validando servicios`);
+
+                const url = `${cfgHost.replace(/\/+$/, '')}/venta/validate`;
+                const headers = { 'Content-Type': 'application/json' };
+                if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
+
+                const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+                let responseData = null;
+                try { responseData = await res.json(); } catch (e) { responseData = null; }
+
+                if (!res.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                        errorMessage = responseData.errors.join('\n• ');
+                    } else if (responseData && typeof responseData.error === 'string') {
+                        errorMessage = responseData.error;
+                    } else if (responseData && (responseData.message || responseData.description)) {
+                        errorMessage = responseData.message || responseData.description;
+                    } else if (responseData) {
+                        errorMessage = JSON.stringify(responseData);
+                    }
+                    Alert.alert(`Error ${res.status}`, errorMessage);
+                    setValidationVisible(false);
+                    return { ok: false, error: errorMessage };
+                }
+
+                // Avanzar progreso: reservamos entre base..(base+4) por servicios
+                done++;
+                const pct = base + Math.round((done / total) * 4);
+                setValidationProgress(pct);
+            }
+
+            // Si llegamos aquí, validaciones de servicios pasaron
+            setValidationProgress(99);
+            setValidationTitle('Validación de servicios completada');
+            return { ok: true };
+        } catch (err) {
+            console.error('Error en validateServicios:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
+            return { ok: false, error: err.message };
+        }
+    };
+
+    // Función que valida ventas de productos usando /venta/validate
+    const validateProductos = async (cfgHost, cfgToken, usuariosIds) => {
+        try {
+            const productos = (productosListRef.current && typeof productosListRef.current.getItems === 'function')
+                ? (productosListRef.current.getItems() || [])
+                : [];
+
+            if (!productos || productos.length === 0) return { ok: true };
+
+            setValidationVisible(true);
+            // Empezar desde el progreso actual o desde 99 si es 0
+            const base = Math.max(validationProgress, 99);
+            setValidationProgress(base);
+            setValidationTitle('Validando productos...');
+
+            const total = productos.length;
+            let done = 0;
+
+            for (let i = 0; i < productos.length; i++) {
+                const entry = productos[i];
+                const sel = entry.selected || entry || {};
+                const producto = sel.producto || sel || {};
+                const comerciable = producto.comerciable || sel.comerciable || {};
+
+                const body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: parseFloat(producto.costo_cup || producto.costo_producto_cup || 0) || 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+
+                setValidationTitle(`Validando productos`);
+
+                const url = `${cfgHost.replace(/\/+$/, '')}/venta/validate`;
+                const headers = { 'Content-Type': 'application/json' };
+                if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
+
+                const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+                let responseData = null;
+                try { responseData = await res.json(); } catch (e) { responseData = null; }
+
+                if (!res.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                        errorMessage = responseData.errors.join('\n• ');
+                    } else if (responseData && typeof responseData.error === 'string') {
+                        errorMessage = responseData.error;
+                    } else if (responseData && (responseData.message || responseData.description)) {
+                        errorMessage = responseData.message || responseData.description;
+                    } else if (responseData) {
+                        errorMessage = JSON.stringify(responseData);
+                    }
+                    Alert.alert(`Error ${res.status}`, errorMessage);
+                    setValidationVisible(false);
+                    return { ok: false, error: errorMessage };
+                }
+
+                // Avanzar progreso: añadir 1% por producto dentro del tramo final
+                done++;
+                const pct = base + Math.round((done / total) * 1);
+                setValidationProgress(pct);
+            }
+
+            setValidationProgress(100);
+            setValidationTitle('Validación de productos completada');
+            return { ok: true };
+        } catch (err) {
+            console.error('Error en validateProductos:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
+            return { ok: false, error: err.message };
+        }
+    };
+
+    // Función que valida ventas de vacunas usando /venta/validate (igual a medicamentos)
+    const validateVacunas = async (cfgHost, cfgToken, usuariosIds) => {
+        try {
+            const items = (vacunasListRef.current && typeof vacunasListRef.current.getItems === 'function')
+                ? (vacunasListRef.current.getItems() || [])
+                : [];
+
+            if (!items || items.length === 0) return { ok: true };
+
+            setValidationVisible(true);
+            setValidationProgress(0);
+            setValidationTitle('Validando vacunas...');
+
+            const total = items.length;
+            let done = 0;
+
+            for (let i = 0; i < items.length; i++) {
+                const entry = items[i];
+                const sel = entry.selected || {};
+                const producto = sel.producto || {};
+                const comerciable = producto.comerciable || {};
+
+                const body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+
+                setValidationTitle(`Validando vacunas`);
+
+                const url = `${cfgHost.replace(/\/+$/, '')}/venta/validate`;
+                const headers = { 'Content-Type': 'application/json' };
+                if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
+
+                const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+                let responseData = null;
+                try { responseData = await res.json(); } catch (e) { responseData = null; }
+
+                if (!res.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                        errorMessage = responseData.errors.join('\n• ');
+                    } else if (responseData && typeof responseData.error === 'string') {
+                        errorMessage = responseData.error;
+                    } else if (responseData && (responseData.message || responseData.description)) {
+                        errorMessage = responseData.message || responseData.description;
+                    } else if (responseData) {
+                        errorMessage = JSON.stringify(responseData);
+                    }
+                    Alert.alert(`Error ${res.status}`, errorMessage);
+                    setValidationVisible(false);
+                    return { ok: false, error: errorMessage };
+                }
+
+                done++;
+                const pct = Math.round((done / total) * 90);
+                setValidationProgress(pct);
+            }
+
+            setValidationProgress(95);
+            setValidationTitle('Validación de vacunas completada');
+            return { ok: true };
+        } catch (err) {
+            console.error('Error en validateVacunas:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
+            return { ok: false, error: err.message };
+        }
+    };
+
+    // Función que valida ventas de antiparasitarios usando /venta/validate (igual a medicamentos)
+    const validateAntiparasitarios = async (cfgHost, cfgToken, usuariosIds) => {
+        try {
+            const items = (antiparasitariosListRef.current && typeof antiparasitariosListRef.current.getItems === 'function')
+                ? (antiparasitariosListRef.current.getItems() || [])
+                : [];
+
+            if (!items || items.length === 0) return { ok: true };
+
+            setValidationVisible(true);
+            setValidationProgress(0);
+            setValidationTitle('Validando antiparasitarios...');
+
+            const total = items.length;
+            let done = 0;
+
+            for (let i = 0; i < items.length; i++) {
+                const entry = items[i];
+                const sel = entry.selected || {};
+                const producto = sel.producto || {};
+                const comerciable = producto.comerciable || {};
+
+                const body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+
+                setValidationTitle(`Validando antiparasitarios`);
+
+                const url = `${cfgHost.replace(/\/+$/, '')}/venta/validate`;
+                const headers = { 'Content-Type': 'application/json' };
+                if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
+
+                const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+                let responseData = null;
+                try { responseData = await res.json(); } catch (e) { responseData = null; }
+
+                if (!res.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                        errorMessage = responseData.errors.join('\n• ');
+                    } else if (responseData && typeof responseData.error === 'string') {
+                        errorMessage = responseData.error;
+                    } else if (responseData && (responseData.message || responseData.description)) {
+                        errorMessage = responseData.message || responseData.description;
+                    } else if (responseData) {
+                        errorMessage = JSON.stringify(responseData);
+                    }
+                    Alert.alert(`Error ${res.status}`, errorMessage);
+                    setValidationVisible(false);
+                    return { ok: false, error: errorMessage };
+                }
+
+                done++;
+                const pct = Math.round((done / total) * 90);
+                setValidationProgress(pct);
+            }
+
+            setValidationProgress(95);
+            setValidationTitle('Validación de antiparasitarios completada');
+            return { ok: true };
+        } catch (err) {
+            console.error('Error en validateAntiparasitarios:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
+            return { ok: false, error: err.message };
+        }
+    };
+    
+    // Crear consulta (usa validaciones). Por ahora no realiza la creación final (comentada)
+    const handleCreate = async () => {
         setLoading(true);
         try {
             const raw = await AsyncStorage.getItem('@config');
@@ -499,54 +1000,101 @@ export default function HistoriaClinicaModalScreen() {
                 return;
             }
 
-            let url = `${host}/api/consultas`;
-            let method = 'POST';
+            // Obtener ids de usuarios seleccionados
+            let usuariosSeleccionados = [];
+            try {
+                if (usuariosListRef.current && typeof usuariosListRef.current.getItems === 'function') {
+                    usuariosSeleccionados = usuariosListRef.current.getItems() || [];
+                }
+            } catch (err) { usuariosSeleccionados = []; }
+            const usuariosIds = usuariosSeleccionados.map(u => u.id_usuario || u.id).filter(Boolean);
 
-            if (mode === 'editar' && consultaData.id_consulta) {
-                url = `${host}/api/consultas/${consultaData.id_consulta}`;
-                method = 'PUT';
-            }
+            // Primero validar Medicamentos
+            const vm = await validateMedicamentos(host, token, usuariosIds);
+            if (!vm.ok) return; // ya mostramos error dentro
 
-            // Preparar datos en formato JSON (listas removidas)
+            // Validar Servicios
+            const vs = await validateServicios(host, token, usuariosIds);
+            if (!vs.ok) return; // error mostrado dentro
+
+            // Validar Productos
+            const vp = await validateProductos(host, token, usuariosIds);
+            if (!vp.ok) return; // error mostrado dentro
+
+            // Validar Vacunas
+            const vv = await validateVacunas(host, token, usuariosIds);
+            if (!vv.ok) return;
+
+            // Validar Antiparasitarios
+            const va = await validateAntiparasitarios(host, token, usuariosIds);
+            if (!va.ok) return;
+
+            // Crear la consulta en el backend
+            setValidationTitle('Creando consulta...');
+            setValidationProgress(96);
+
             const payload = {
-                fecha: consultaData.fecha,
+                fecha: new Date(consultaData.fecha).toISOString(),
                 motivo: consultaData.motivo,
-                diagnostico: consultaData.diagnostico || null,
-                anamnesis: consultaData.anamnesis || null,
-                tratamiento: consultaData.tratamiento || null,
-                patologia: consultaData.patologia || null,
-                id_paciente: consultaData.id_paciente,
-                id_usuario: consultaData.id_usuario,
-                vacunas: null,
-                antiparasitarios: null,
-                ventas: null,
-                servicios: null,
+                diagnostico: consultaData.diagnostico,
+                anamnesis: consultaData.anamnesis,
+                tratamiento: consultaData.tratamiento,
+                patologia: consultaData.patologia,
+                id_paciente: consultaData.id_paciente || pacienteParam?.id_paciente || pacienteParam?.id || null,
+                id_usuario: cfg.usuario?.id_usuario || cfg.usuario?.id || null,
+                fotos: [],
             };
 
-            const headers = {
-                'Content-Type': 'application/json',
-            };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            try {
+                const urlCreate = `${host.replace(/\/+$/, '')}/consulta/CreateWithPhotos`;
+                const headersCreate = { 'Content-Type': 'application/json' };
+                if (token) headersCreate['Authorization'] = `Bearer ${token}`;
 
-            const response = await fetch(url, {
-                method,
-                headers,
-                body: JSON.stringify(payload),
-            });
+                const resCreate = await fetch(urlCreate, { method: 'POST', headers: headersCreate, body: JSON.stringify(payload) });
+                let responseCreateData = null;
+                try { responseCreateData = await resCreate.json(); } catch (e) { responseCreateData = null; }
 
-            if (!response.ok) {
-                const error = await response.text();
-                Alert.alert('Error', `Fallo al guardar: ${error}`);
+                if (!resCreate.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (responseCreateData && responseCreateData.errors && Array.isArray(responseCreateData.errors)) {
+                        errorMessage = responseCreateData.errors.join('\n• ');
+                    } else if (responseCreateData && typeof responseCreateData.error === 'string') {
+                        errorMessage = responseCreateData.error;
+                    } else if (responseCreateData && (responseCreateData.message || responseCreateData.description)) {
+                        errorMessage = responseCreateData.message || responseCreateData.description;
+                    } else if (responseCreateData) {
+                        errorMessage = JSON.stringify(responseCreateData);
+                    }
+                    Alert.alert(`Error ${resCreate.status}`, errorMessage);
+                    setValidationVisible(false);
+                    return;
+                }
+
+                // Aquí se crearían las ventas (comentado por ahora)
+                // TODO: crear ventas usando los endpoints correspondientes
+
+                setValidationProgress(100);
+                setValidationTitle('Consulta creada correctamente');
+                setTimeout(() => { setValidationVisible(false); }, 800);
+                ToastAndroid.show('Consulta creada', ToastAndroid.SHORT);
+            } catch (errCreate) {
+                console.error('Error creando consulta:', errCreate);
+                Alert.alert('Error', errCreate.message || 'Error desconocido');
+                setValidationVisible(false);
                 return;
             }
-
-            ToastAndroid.show(`Consulta ${mode === 'editar' ? 'actualizada' : 'creada'} exitosamente`, ToastAndroid.SHORT);
-            router.back();
-        } catch (error) {
-            Alert.alert('Error', error.message);
+        } catch (err) {
+            console.error('Error en handleCreate:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
         } finally {
             setLoading(false);
         }
+    };
+
+    // Actualizar consulta (mismo flujo de validación)
+    const handleUpdate = async () => {
+        // Reuse same flow for now
+        await handleCreate();
     };
 
     const handleDelete = async () => {
@@ -696,7 +1244,31 @@ export default function HistoriaClinicaModalScreen() {
     return (
         <View style={styles.container}>
             <TopBar onMenuNavigate={() => { }} />
-            <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always">
+
+            {/* Modal bloqueante mientras se cargan los usuarios */}
+            <Modal visible={usuariosLoading} transparent animationType="none">
+                <View style={styles.loadingOverlay}>
+                    <View style={styles.loadingBox}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.loadingText}>Cargando usuarios...</Text>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* Modal de validación/progreso durante creación/edición */}
+            <Modal visible={validationVisible} transparent animationType="fade">
+                <View style={styles.loadingOverlay}>
+                    <View style={[styles.loadingBox, { width: 300 }]}>
+                        <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>{validationTitle}</Text>
+                        <View style={{ width: '100%', height: 12, backgroundColor: '#eee', borderRadius: 8, overflow: 'hidden' }}>
+                            <View style={{ width: `${validationProgress}%`, height: '100%', backgroundColor: Colors.primary }} />
+                        </View>
+                        <Text style={[styles.loadingText, { marginTop: Spacing.s }]}>{validationProgress}%</Text>
+                    </View>
+                </View>
+            </Modal>
+
+            <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always">
                 {/* Header */}
                 <View style={styles.headerRow}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -712,7 +1284,7 @@ export default function HistoriaClinicaModalScreen() {
                 </View>
 
                 {/* Fecha */}
-                <View style={styles.section}>
+                <View style={styles.section} onLayout={(e) => { positionsRef.current.fecha = e.nativeEvent.layout.y; }}>
                     <Text style={styles.label}>Fecha *</Text>
                     {isView ? (
                         <Text style={[styles.input, styles.disabledInput]}>
@@ -742,7 +1314,7 @@ export default function HistoriaClinicaModalScreen() {
                 </View>
 
                 {/* Motivo */}
-                <View style={styles.section}>
+                <View style={styles.section} onLayout={(e) => { positionsRef.current.motivo = e.nativeEvent.layout.y; }}>
                     <Text style={styles.label}>Motivo de la Visita *</Text>
                     {isView ? (
                         <Text style={[styles.input, styles.disabledInput]}>
@@ -761,7 +1333,7 @@ export default function HistoriaClinicaModalScreen() {
                 </View>
 
                 {/* Anamnesis */}
-                <View style={styles.section}>
+                <View style={styles.section} onLayout={(e) => { positionsRef.current.anamnesis = e.nativeEvent.layout.y; }}>
                     <View style={styles.sectionHeaderWithButton}>
                         <Text style={styles.label}>Anamnesis *</Text>
                         <AudioRecordButton field="anamnesis" label="Grabar" />
@@ -884,72 +1456,37 @@ export default function HistoriaClinicaModalScreen() {
                         </View>
                     );
                 })()}
+                <View onLayout={(e) => { positionsRef.current.usuarios = e.nativeEvent.layout.y; }}>
+                    <UsuariosLista
+                        ref={usuariosListRef}
+                        data={usuariosDisponibles}
+                        initialSelected={usuariosPreseleccionados}
+                        isEditable={isEditable}
+                        onChange={(t) => setListsTotals(prev => ({ ...prev, usuarios: t }))}
+                    />
+                </View>
 
                 {/* List sections removed */}
 
                 {/* Fotos Consulta - Galería */}
-                {fotosConsulta && fotosConsulta.length > 0 && (
-                    <View style={styles.section}>
-                        <View style={styles.fotosHeader}>
-                            <Text style={styles.label}>Imágenes de la Consulta</Text>
-                            <TouchableOpacity
-                                onPress={() => setShowFotos(!showFotos)}
-                                disabled={fotosConsulta.length === 0}
-                                style={styles.eyeButton}
-                            >
-                                <Image
-                                    source={
-                                        showFotos
-                                            ? require('../assets/images/eye-open.png')
-                                            : require('../assets/images/eye-closed.png')
-                                    }
-                                    style={styles.eyeIcon}
-                                    resizeMode="contain"
-                                />
+                <View style={styles.section}>
+                    <View style={styles.fotosHeader}>
+                        <Text style={styles.label}>Imágenes de la Consulta</Text>
+                        <View style={{ flexDirection: 'row', gap: Spacing.s }}>
+                            <TouchableOpacity onPress={() => Alert.alert('Fotos', 'Función de fotos en desarrollo')} style={[styles.eyeButton, styles.photoAddButton]} disabled={!isEditable}>
+                                <Text style={styles.photoAddButtonText}>+</Text>
                             </TouchableOpacity>
                         </View>
-
-                        {showFotos && (
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                style={styles.fotosCarrusel}
-                                contentContainerStyle={styles.fotosCarruselContent}
-                            >
-                                {fotosConsulta.map((foto, idx) => {
-                                    const fotoUrl = typeof foto === 'string' ? buildFotoUrl(foto) : buildFotoUrl(foto.ruta || foto);
-                                    return (
-                                        <Image
-                                            key={idx}
-                                            source={{ uri: fotoUrl }}
-                                            style={styles.fotoItem}
-                                        />
-                                    );
-                                })}
-                            </ScrollView>
-                        )}
                     </View>
-                )}
 
-                {/* Si no hay fotos, mostrar botón deshabilitado */}
-                {(!fotosConsulta || fotosConsulta.length === 0) && (
-                    <View style={styles.section}>
-                        <View style={styles.fotosHeader}>
-                            <Text style={styles.label}>Imágenes de la Consulta</Text>
-                            <TouchableOpacity
-                                disabled={true}
-                                style={[styles.eyeButton, styles.eyeButtonDisabled]}
-                            >
-                                <Image
-                                    source={require('../assets/images/eye-closed.png')}
-                                    style={styles.eyeIcon}
-                                    resizeMode="contain"
-                                />
-                            </TouchableOpacity>
-                        </View>
-                        <Text style={styles.noFotosText}>No hay imágenes disponibles</Text>
-                    </View>
-                )}
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.fotosCarrusel}
+                        contentContainerStyle={styles.fotosCarruselContent}
+                    >
+                    </ScrollView>
+                </View>
 
                 {/* Diagnóstico */}
                 <View style={styles.section}>
@@ -957,7 +1494,7 @@ export default function HistoriaClinicaModalScreen() {
                         <Text style={styles.label}>Diagnóstico</Text>
                         <AudioRecordButton field="diagnostico" label="Grabar" />
                     </View>
-                    
+
                     {isView ? (
                         <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
                             {consultaData.diagnostico || '-'}
@@ -983,7 +1520,7 @@ export default function HistoriaClinicaModalScreen() {
                         <Text style={styles.label}>Tratamiento</Text>
                         <AudioRecordButton field="tratamiento" label="Grabar" />
                     </View>
-                    
+
                     {isView ? (
                         <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
                             {consultaData.tratamiento || '-'}
@@ -1009,7 +1546,7 @@ export default function HistoriaClinicaModalScreen() {
                         <Text style={styles.label}>Patología</Text>
                         <AudioRecordButton field="patologia" label="Grabar" />
                     </View>
-                    
+
                     {isView ? (
                         <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
                             {consultaData.patologia || '-'}
@@ -1251,6 +1788,25 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontWeight: '500',
     },
+    loadingOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingBox: {
+        backgroundColor: '#fff',
+        padding: Spacing.m,
+        borderRadius: 8,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    loadingText: {
+        marginTop: Spacing.s,
+        color: Colors.textSecondary,
+        fontSize: Typography.body,
+    },
     // List styles removed
     // Estilos existentes para fotos
     fotosHeader: {
@@ -1290,6 +1846,47 @@ const styles = StyleSheet.create({
         borderColor: '#000',
         marginRight: Spacing.s,
     },
+    fotoCloseButton: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: '#fff',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1001,
+        borderWidth: 1,
+        borderColor: '#900',
+    },
+    fotoCloseX: {
+        color: '#900',
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    fullscreenOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.95)',
+        paddingTop: Spacing.m,
+    },
+    fullscreenHeader: {
+        height: 48,
+        justifyContent: 'flex-start',
+        paddingHorizontal: Spacing.s,
+    },
+    fullscreenCloseButton: {
+        padding: Spacing.s,
+        alignSelf: 'flex-start',
+    },
+    fullscreenCloseText: {
+        color: '#fff',
+        fontSize: Typography.body,
+    },
+    fullscreenImage: {
+        width: screenWidth - 32,
+        height: screenWidth - 32,
+    },
     noFotosText: {
         fontSize: Typography.small,
         color: '#999',
@@ -1327,6 +1924,33 @@ const styles = StyleSheet.create({
         color: Colors.textPrimary,
         fontSize: Typography.body,
         fontWeight: '600',
+    },
+    deletePhotoButton: {
+        backgroundColor: '#fff',
+        paddingVertical: Spacing.s,
+        paddingHorizontal: Spacing.m,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#900',
+        marginTop: Spacing.s,
+    },
+    deletePhotoButtonText: {
+        color: '#900',
+        fontSize: Typography.body,
+        fontWeight: '600',
+    },
+    photoAddButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
+    },
+    photoAddButtonText: {
+        color: '#fff',
+        fontSize: Typography.h2,
+        fontWeight: '700',
     },
     buttonDisabled: {
         opacity: 0.6,
