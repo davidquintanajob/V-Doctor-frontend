@@ -26,6 +26,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Modal from 'react-native/Libraries/Modal/Modal';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -83,6 +84,12 @@ export default function HistoriaClinicaModalScreen() {
     const [recordingTimePatologia, setRecordingTimePatologia] = useState(0);
     const [isProcessingAudioPatologia, setIsProcessingAudioPatologia] = useState(false);
     const [recordingTimerPatologia, setRecordingTimerPatologia] = useState(null);
+
+    // Estados para imágenes de la consulta
+    const [fotos, setFotos] = useState([]); // Array de objetos {uri: string, base64: string, nota: string}
+    const [mostrarNotaIndex, setMostrarNotaIndex] = useState(null);
+    const [notaActual, setNotaActual] = useState('');
+    const [imagenFullscreen, setImagenFullscreen] = useState(null);
 
     // Refs para las listas
     const vacunasListRef = React.useRef(null);
@@ -214,6 +221,165 @@ export default function HistoriaClinicaModalScreen() {
             if (recordingTimerPatologia) clearInterval(recordingTimerPatologia);
         };
     }, [recordingTimerAnamnesis, recordingTimerDiagnostico, recordingTimerTratamiento, recordingTimerPatologia]);
+
+    // Función para convertir URI a base64
+    const uriToBase64 = async (uri) => {
+        if (!uri) return '';
+        try {
+            const enc = (FileSystem.EncodingType && FileSystem.EncodingType.Base64) ? FileSystem.EncodingType.Base64 : 'base64';
+            try {
+                const b64 = await FileSystem.readAsStringAsync(uri, { encoding: enc });
+                return b64;
+            } catch (readErr) {
+                try {
+                    const tmpPath = FileSystem.documentDirectory + `tmp_image_${Date.now()}`;
+                    const dl = await FileSystem.downloadAsync(uri, tmpPath);
+                    const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: 'base64' });
+                    try { await FileSystem.deleteAsync(dl.uri, { idempotent: true }); } catch (e) { }
+                    return b64;
+                } catch (dlErr) {
+                    console.warn('Fallo al descargar/leer imagen para base64', dlErr);
+                    return '';
+                }
+            }
+        } catch (err) {
+            console.warn('No se pudo convertir imagen a base64', err);
+            return '';
+        }
+    };
+
+    // Función para abrir la cámara
+    const openCamera = async () => {
+        try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la cámara.');
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                quality: 0.7,
+                allowsEditing: true,
+                aspect: [4, 3],
+                base64: false, // No obtener base64 directamente, lo convertiremos después
+            });
+
+            // SDK newer uses result.assets
+            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
+            if (uri) {
+                // Convertir a base64
+                const base64 = await uriToBase64(uri);
+                if (base64) {
+                    // Agregar la imagen al array de fotos
+                    const nuevaFoto = {
+                        uri: uri,
+                        base64: base64,
+                        nota: '' // Nota inicial vacía
+                    };
+                    setFotos(prev => [...prev, nuevaFoto]);
+                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
+                } else {
+                    Alert.alert('Error', 'No se pudo procesar la imagen');
+                }
+            }
+        } catch (err) {
+            console.error('Error opening camera', err);
+            Alert.alert('Error', 'No se pudo abrir la cámara.');
+        }
+    };
+
+    // Función para abrir la galería
+    const openGallery = async () => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la galería.');
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.7,
+                allowsEditing: true,
+                aspect: [4, 3],
+                base64: false,
+            });
+
+            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
+            if (uri) {
+                // Convertir a base64
+                const base64 = await uriToBase64(uri);
+                if (base64) {
+                    // Agregar la imagen al array de fotos
+                    const nuevaFoto = {
+                        uri: uri,
+                        base64: base64,
+                        nota: '' // Nota inicial vacía
+                    };
+                    setFotos(prev => [...prev, nuevaFoto]);
+                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
+                } else {
+                    Alert.alert('Error', 'No se pudo procesar la imagen');
+                }
+            }
+        } catch (err) {
+            console.error('Error opening gallery', err);
+            Alert.alert('Error', 'No se pudo abrir la galería.');
+        }
+    };
+
+    // Función para eliminar una foto
+    const removeFoto = (index) => {
+        Alert.alert(
+            'Eliminar foto',
+            '¿Estás seguro de que quieres eliminar esta foto?',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Eliminar',
+                    style: 'destructive',
+                    onPress: () => {
+                        setFotos(prev => prev.filter((_, i) => i !== index));
+                        // Si estamos editando una nota, limpiarla
+                        if (mostrarNotaIndex === index) {
+                            setMostrarNotaIndex(null);
+                            setNotaActual('');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // Función para agregar/editar nota de una foto
+    const agregarNota = (index) => {
+        setMostrarNotaIndex(index);
+        setNotaActual(fotos[index]?.nota || '');
+    };
+
+    // Función para guardar la nota
+    const guardarNota = (index) => {
+        if (notaActual.trim() === '') {
+            Alert.alert('Nota vacía', 'Por favor ingresa una nota o cancela');
+            return;
+        }
+
+        const fotosActualizadas = [...fotos];
+        fotosActualizadas[index] = {
+            ...fotosActualizadas[index],
+            nota: notaActual.trim()
+        };
+        setFotos(fotosActualizadas);
+        setMostrarNotaIndex(null);
+        setNotaActual('');
+        ToastAndroid.show('Nota guardada', ToastAndroid.SHORT);
+    };
+
+    // Función para cancelar la edición de nota
+    const cancelarNota = () => {
+        setMostrarNotaIndex(null);
+        setNotaActual('');
+    };
 
     const formatDateToYMD = (date) => {
         const y = date.getFullYear();
@@ -1033,6 +1199,12 @@ export default function HistoriaClinicaModalScreen() {
             setValidationTitle('Creando consulta...');
             setValidationProgress(96);
 
+            // Preparar el array de fotos para el payload
+            const fotosPayload = fotos.map(foto => ({
+                imagen: foto.base64,
+                nota: foto.nota || ''
+            }));
+
             const payload = {
                 fecha: new Date(consultaData.fecha).toISOString(),
                 motivo: consultaData.motivo,
@@ -1042,7 +1214,7 @@ export default function HistoriaClinicaModalScreen() {
                 patologia: consultaData.patologia,
                 id_paciente: consultaData.id_paciente || pacienteParam?.id_paciente || pacienteParam?.id || null,
                 id_usuario: cfg.usuario?.id_usuario || cfg.usuario?.id || null,
-                fotos: [],
+                fotos: fotosPayload, // Agregar el array de fotos
             };
 
             try {
@@ -1239,11 +1411,45 @@ export default function HistoriaClinicaModalScreen() {
         );
     };
 
+    // Modal para vista completa de imagen
+    const FullscreenImageModal = () => {
+        if (!imagenFullscreen) return null;
+
+        return (
+            <Modal visible={!!imagenFullscreen} transparent animationType="fade">
+                <View style={styles.fullscreenOverlay}>
+                    <View style={styles.fullscreenHeader}>
+                        <TouchableOpacity
+                            style={styles.fullscreenCloseButton}
+                            onPress={() => setImagenFullscreen(null)}
+                        >
+                            <Text style={styles.fullscreenCloseText}>Cerrar</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <ScrollView
+                        contentContainerStyle={styles.fullscreenScrollContent}
+                        maximumZoomScale={3}
+                        minimumZoomScale={1}
+                    >
+                        <Image
+                            source={{ uri: imagenFullscreen }}
+                            style={styles.fullscreenImage}
+                            resizeMode="contain"
+                        />
+                    </ScrollView>
+                </View>
+            </Modal>
+        );
+    };
+
     // List components removed
 
     return (
         <View style={styles.container}>
             <TopBar onMenuNavigate={() => { }} />
+
+            {/* Modal para vista completa de imagen */}
+            <FullscreenImageModal />
 
             {/* Modal bloqueante mientras se cargan los usuarios */}
             <Modal visible={usuariosLoading} transparent animationType="none">
@@ -1473,19 +1679,108 @@ export default function HistoriaClinicaModalScreen() {
                     <View style={styles.fotosHeader}>
                         <Text style={styles.label}>Imágenes de la Consulta</Text>
                         <View style={{ flexDirection: 'row', gap: Spacing.s }}>
-                            <TouchableOpacity onPress={() => Alert.alert('Fotos', 'Función de fotos en desarrollo')} style={[styles.eyeButton, styles.photoAddButton]} disabled={!isEditable}>
-                                <Text style={styles.photoAddButtonText}>+</Text>
-                            </TouchableOpacity>
+                            {isEditable && (
+                                <>
+                                    <TouchableOpacity onPress={openCamera} style={[styles.eyeButton, styles.photoAddButton]}>
+                                        <Image
+                                            source={require('../assets/images/camera.png')}
+                                            style={styles.photoIcon}
+                                            resizeMode="contain"
+                                        />
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={openGallery} style={[styles.eyeButton, styles.photoAddButton]}>
+                                        <Image
+                                            source={require('../assets/images/galeria-de-imagenes.png')}
+                                            style={styles.photoIcon}
+                                            resizeMode="contain"
+                                        />
+                                    </TouchableOpacity>
+                                </>
+                            )}
                         </View>
                     </View>
 
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        style={styles.fotosCarrusel}
-                        contentContainerStyle={styles.fotosCarruselContent}
-                    >
-                    </ScrollView>
+                    {fotos.length === 0 ? (
+                        <Text style={styles.noFotosText}>
+                            No hay imágenes agregadas. {isEditable ? 'Toca los botones para agregar fotos.' : ''}
+                        </Text>
+                    ) : (
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.fotosCarrusel}
+                            contentContainerStyle={styles.fotosCarruselContent}
+                        >
+                            {fotos.map((foto, index) => (
+                                <View key={index} style={styles.fotoItemContainer}>
+                                    <TouchableOpacity
+                                        style={styles.fotoItem}
+                                        onPress={() => setImagenFullscreen(foto.uri)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Image
+                                            source={{ uri: foto.uri }}
+                                            style={styles.fotoImage}
+                                            resizeMode="cover"
+                                        />
+                                        {isEditable && (
+                                            <TouchableOpacity
+                                                style={styles.fotoCloseButton}
+                                                onPress={() => removeFoto(index)}
+                                            >
+                                                <Text style={styles.fotoCloseX}>✕</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </TouchableOpacity>
+                                    
+                                    {/* Nota de la foto */}
+                                    {mostrarNotaIndex === index ? (
+                                        <View style={styles.notaContainer}>
+                                            <TextInput
+                                                style={styles.notaInput}
+                                                value={notaActual}
+                                                onChangeText={setNotaActual}
+                                                placeholder="Agregar nota a la imagen..."
+                                                placeholderTextColor="#999"
+                                                multiline
+                                                numberOfLines={2}
+                                            />
+                                            <View style={styles.notaButtonsContainer}>
+                                                <TouchableOpacity
+                                                    style={[styles.notaButton, styles.notaButtonCancel]}
+                                                    onPress={cancelarNota}
+                                                >
+                                                    <Text style={styles.notaButtonText}>Cancelar</Text>
+                                                </TouchableOpacity>
+                                                <TouchableOpacity
+                                                    style={[styles.notaButton, styles.notaButtonSave]}
+                                                    onPress={() => guardarNota(index)}
+                                                >
+                                                    <Text style={styles.notaButtonText}>Guardar</Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <View style={styles.fotoInfoContainer}>
+                                            <Text style={styles.fotoNotaText} numberOfLines={1}>
+                                                {foto.nota || 'Sin nota'}
+                                            </Text>
+                                            {isEditable && (
+                                                <TouchableOpacity
+                                                    style={styles.addNotaButton}
+                                                    onPress={() => agregarNota(index)}
+                                                >
+                                                    <Text style={styles.addNotaButtonText}>
+                                                        {foto.nota ? 'Editar nota' : 'Agregar nota'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    )}
+                                </View>
+                            ))}
+                        </ScrollView>
+                    )}
                 </View>
 
                 {/* Diagnóstico */}
@@ -1807,8 +2102,7 @@ const styles = StyleSheet.create({
         color: Colors.textSecondary,
         fontSize: Typography.body,
     },
-    // List styles removed
-    // Estilos existentes para fotos
+    // Estilos para fotos
     fotosHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -1822,13 +2116,17 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#000',
     },
-    eyeButtonDisabled: {
-        opacity: 0.5,
-        backgroundColor: '#ccc',
+    photoAddButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
     },
-    eyeIcon: {
-        width: 20,
-        height: 20,
+    photoIcon: {
+        width: 24,
+        height: 24,
         tintColor: Colors.textPrimary,
     },
     fotosCarrusel: {
@@ -1838,13 +2136,22 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.xs,
         gap: Spacing.s,
     },
+    fotoItemContainer: {
+        marginRight: Spacing.s,
+        width: 180,
+    },
     fotoItem: {
-        width: 150,
-        height: 150,
+        width: 180,
+        height: 180,
         borderRadius: 8,
         borderWidth: 1,
         borderColor: '#000',
-        marginRight: Spacing.s,
+        overflow: 'hidden',
+        position: 'relative',
+    },
+    fotoImage: {
+        width: '100%',
+        height: '100%',
     },
     fotoCloseButton: {
         position: 'absolute',
@@ -1853,7 +2160,7 @@ const styles = StyleSheet.create({
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: '#fff',
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 1001,
@@ -1864,6 +2171,69 @@ const styles = StyleSheet.create({
         color: '#900',
         fontWeight: '700',
         fontSize: 14,
+    },
+    fotoInfoContainer: {
+        marginTop: Spacing.xs,
+        paddingHorizontal: Spacing.xs,
+    },
+    fotoNotaText: {
+        fontSize: Typography.small,
+        color: Colors.textSecondary,
+        marginBottom: 4,
+    },
+    addNotaButton: {
+        backgroundColor: Colors.primarySuave,
+        paddingVertical: 4,
+        paddingHorizontal: 8,
+        borderRadius: 4,
+        alignSelf: 'flex-start',
+    },
+    addNotaButtonText: {
+        fontSize: Typography.small,
+        color: Colors.textSecondary,
+    },
+    notaContainer: {
+        marginTop: Spacing.xs,
+        backgroundColor: '#f9f9f9',
+        padding: Spacing.s,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#ddd',
+    },
+    notaInput: {
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#ccc',
+        borderRadius: 4,
+        paddingHorizontal: Spacing.s,
+        paddingVertical: 6,
+        fontSize: Typography.small,
+        color: Colors.textSecondary,
+        minHeight: 60,
+        textAlignVertical: 'top',
+    },
+    notaButtonsContainer: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: Spacing.s,
+    },
+    notaButton: {
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 4,
+        borderWidth: 1,
+    },
+    notaButtonCancel: {
+        backgroundColor: '#fff',
+        borderColor: '#ccc',
+    },
+    notaButtonSave: {
+        backgroundColor: Colors.primary,
+        borderColor: Colors.primary,
+    },
+    notaButtonText: {
+        fontSize: Typography.small,
+        fontWeight: '600',
     },
     fullscreenOverlay: {
         flex: 1,
@@ -1882,6 +2252,12 @@ const styles = StyleSheet.create({
     fullscreenCloseText: {
         color: '#fff',
         fontSize: Typography.body,
+    },
+    fullscreenScrollContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: Spacing.m,
     },
     fullscreenImage: {
         width: screenWidth - 32,
@@ -1938,19 +2314,6 @@ const styles = StyleSheet.create({
         color: '#900',
         fontSize: Typography.body,
         fontWeight: '600',
-    },
-    photoAddButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.primary,
-    },
-    photoAddButtonText: {
-        color: '#fff',
-        fontSize: Typography.h2,
-        fontWeight: '700',
     },
     buttonDisabled: {
         opacity: 0.6,

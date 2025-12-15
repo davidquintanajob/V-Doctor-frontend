@@ -190,6 +190,49 @@ export default function HistoriaClinicaScreen() {
         }
     }, [currentPage]);
 
+    const handleDeleteConsulta = async (id_consulta) => {
+        try {
+            const raw = await AsyncStorage.getItem('@config');
+            if (!raw) {
+                Alert.alert('Error', 'No hay configuración de API');
+                return;
+            }
+            const cfg = JSON.parse(raw);
+            const host = cfg.api_host || cfg.apihost || cfg.apiHost || '';
+            const token = cfg.token || null;
+            if (!host) {
+                Alert.alert('Error', 'No hay host configurado');
+                return;
+            }
+            const url = `${host.replace(/\/+$/, '')}/consulta/Delete/${id_consulta}`;
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(url, { method: 'DELETE', headers });
+            let responseData = null;
+            try { responseData = await res.json(); } catch (e) { responseData = null; }
+            if (!res.ok) {
+                let errorMessage = 'Error desconocido';
+                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                    errorMessage = responseData.errors.join('\n• ');
+                } else if (responseData && typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                } else if (responseData && (responseData.message || responseData.description)) {
+                    errorMessage = responseData.message || responseData.description;
+                } else if (responseData) {
+                    errorMessage = JSON.stringify(responseData);
+                }
+                Alert.alert(`Error ${res.status}`, errorMessage);
+                return;
+            }
+            // Success
+            ToastAndroid.show('Consulta eliminada', ToastAndroid.SHORT);
+            fetchConsultas(currentPage, false);
+        } catch (err) {
+            console.error('Error eliminando consulta:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+        }
+    };
+
     const calculateAgeFromDate = (birthDate) => {
         const now = new Date();
         let years = now.getFullYear() - birthDate.getFullYear();
@@ -484,7 +527,7 @@ export default function HistoriaClinicaScreen() {
                                             <Image source={require('../assets/images/editar.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
                                         </TouchableOpacity>
 
-                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_rojo_opciones }]} onPress={() => Alert.alert('Confirmar eliminación', `¿Eliminar consulta ${c.motivo || c.id}?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Eliminar', style: 'destructive', onPress: () => { ToastAndroid.show('Acción de eliminar pendiente', ToastAndroid.SHORT); } }])}>
+                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_rojo_opciones }]} onPress={() => Alert.alert('Confirmar eliminación', `¿Eliminar consulta ${c.motivo || c.id}?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Eliminar', style: 'destructive', onPress: () => handleDeleteConsulta(c.id_consulta || c.id) }])}>
                                             <Image source={require('../assets/images/basura.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
                                         </TouchableOpacity>
                                     </View>
