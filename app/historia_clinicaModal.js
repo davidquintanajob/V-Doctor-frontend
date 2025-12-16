@@ -1769,7 +1769,7 @@ export default function HistoriaClinicaModalScreen() {
                     <View style={styles.fotosHeader}>
                         <Text style={styles.label}>Imágenes de la Consulta</Text>
                         <View style={{ flexDirection: 'row', gap: Spacing.s }}>
-                            {isEditable && (
+                            {(mode === "crear") && (
                                 <>
                                     <TouchableOpacity onPress={openCamera} style={[styles.eyeButton, styles.photoAddButton]}>
                                         <Image
@@ -1813,7 +1813,7 @@ export default function HistoriaClinicaModalScreen() {
                                             style={styles.fotoImage}
                                             resizeMode="cover"
                                         />
-                                        {isEditable && (
+                                        {(mode === "crear") && (
                                             <TouchableOpacity
                                                 style={styles.fotoCloseButton}
                                                 onPress={() => removeFoto(index)}
@@ -1855,7 +1855,7 @@ export default function HistoriaClinicaModalScreen() {
                                             <Text style={styles.fotoNotaText} numberOfLines={1}>
                                                 {foto.nota || 'Sin nota'}
                                             </Text>
-                                            {isEditable && (
+                                            {(mode === "crear") && (
                                                 <TouchableOpacity
                                                     style={styles.addNotaButton}
                                                     onPress={() => agregarNota(index)}
