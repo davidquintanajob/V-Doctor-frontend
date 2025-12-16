@@ -131,6 +131,68 @@ export default function HistoriaClinicaModalScreen() {
 
     // (List states removed)
 
+    // Dentro del componente HistoriaClinicaModalScreen, agrega este useEffect:
+    useEffect(() => {
+        const cargarFotosExistentes = async () => {
+            // Solo cargar si tenemos fotos y no las hemos cargado aún
+            if (!consultaParam?.foto_consulta || !apiHost || fotos.length > 0) return;
+
+            // Si estamos en modo ver/editar y hay fotos existentes
+            if ((mode === 'ver' || mode === 'editar') && consultaParam.foto_consulta.length > 0) {
+                try {
+                    console.log('Cargando fotos existentes...');
+
+                    // Para no bloquear la UI, cargamos las fotos una por una
+                    const fotosCargadas = [];
+
+                    for (const foto of consultaParam.foto_consulta) {
+                        // Construir URL completa de la imagen
+                        const imageUrl = `${apiHost}${foto.ruta}`;
+                        console.log('Cargando imagen:', imageUrl);
+
+                        // Intentar convertir a base64
+                        const base64Data = await uriToBase64(imageUrl);
+
+                        if (base64Data) {
+                            fotosCargadas.push({
+                                uri: imageUrl, // Guardamos la URL para mostrar
+                                base64: base64Data, // Guardamos base64 para enviar
+                                nota: foto.nota || '',
+                                id_foto_consulta: foto.id_foto_consulta
+                            });
+                            console.log('Imagen cargada exitosamente');
+                        } else {
+                            console.warn('No se pudo cargar la imagen:', imageUrl);
+                            // Aún así agregamos la foto con la URL para mostrar (pero sin base64)
+                            fotosCargadas.push({
+                                uri: imageUrl,
+                                base64: '',
+                                nota: foto.nota || '',
+                                id_foto_consulta: foto.id_foto_consulta
+                            });
+                        }
+                    }
+
+                    setFotos(fotosCargadas);
+                    console.log('Fotos cargadas:', fotosCargadas.length);
+
+                } catch (error) {
+                    console.error('Error cargando fotos existentes:', error);
+                    // Si falla la carga, al menos mostrar las URLs
+                    const fotosFallback = consultaParam.foto_consulta.map(foto => ({
+                        uri: `${apiHost}${foto.ruta}`,
+                        base64: '',
+                        nota: foto.nota || '',
+                        id_foto_consulta: foto.id_foto_consulta
+                    }));
+                    setFotos(fotosFallback);
+                }
+            }
+        };
+
+        cargarFotosExistentes();
+    }, [consultaParam, apiHost, mode]);
+
     // Inicializar API host
     useEffect(() => {
         const getConfig = async () => {
@@ -225,27 +287,55 @@ export default function HistoriaClinicaModalScreen() {
     // Función para convertir URI a base64
     const uriToBase64 = async (uri) => {
         if (!uri) return '';
-        try {
-            const enc = (FileSystem.EncodingType && FileSystem.EncodingType.Base64) ? FileSystem.EncodingType.Base64 : 'base64';
+
+        // Si ya es una URI local (comienza con file://, content://, etc.)
+        if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith(FileSystem.documentDirectory)) {
             try {
+                const enc = (FileSystem.EncodingType && FileSystem.EncodingType.Base64) ? FileSystem.EncodingType.Base64 : 'base64';
                 const b64 = await FileSystem.readAsStringAsync(uri, { encoding: enc });
                 return b64;
             } catch (readErr) {
-                try {
-                    const tmpPath = FileSystem.documentDirectory + `tmp_image_${Date.now()}`;
-                    const dl = await FileSystem.downloadAsync(uri, tmpPath);
-                    const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: 'base64' });
-                    try { await FileSystem.deleteAsync(dl.uri, { idempotent: true }); } catch (e) { }
-                    return b64;
-                } catch (dlErr) {
-                    console.warn('Fallo al descargar/leer imagen para base64', dlErr);
-                    return '';
-                }
+                console.warn('Fallo al leer imagen local:', readErr);
+                return '';
             }
-        } catch (err) {
-            console.warn('No se pudo convertir imagen a base64', err);
-            return '';
         }
+
+        // Si es una URL HTTP/HTTPS (imagen remota)
+        if (uri.startsWith('http://') || uri.startsWith('https://')) {
+            try {
+                // 1. Descargar la imagen a un archivo temporal
+                const filename = uri.split('/').pop() || `image_${Date.now()}.jpg`;
+                const fileUri = FileSystem.cacheDirectory + filename;
+
+                // Configurar headers si es necesario (ej: autenticación)
+                const downloadOptions = {};
+                if (token) {
+                    downloadOptions.headers = {
+                        'Authorization': `Bearer ${token}`
+                    };
+                }
+
+                const downloadResult = await FileSystem.downloadAsync(uri, fileUri, downloadOptions);
+
+                // 2. Leer el archivo descargado como base64
+                const b64 = await FileSystem.readAsStringAsync(downloadResult.uri, {
+                    encoding: FileSystem.EncodingType.Base64
+                });
+
+                // 3. Opcional: limpiar el archivo temporal
+                try {
+                    await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+                } catch (e) { /* ignorar error de limpieza */ }
+
+                return b64;
+            } catch (error) {
+                console.warn('Fallo al descargar/convertir imagen remota:', error);
+                return '';
+            }
+        }
+
+        console.warn('URI no reconocida:', uri);
+        return '';
     };
 
     // Función para abrir la cámara
@@ -1147,7 +1237,7 @@ export default function HistoriaClinicaModalScreen() {
             return { ok: false, error: err.message };
         }
     };
-    
+
     // Crear consulta (usa validaciones). Por ahora no realiza la creación final (comentada)
     const handleCreate = async () => {
         setLoading(true);
@@ -1732,7 +1822,7 @@ export default function HistoriaClinicaModalScreen() {
                                             </TouchableOpacity>
                                         )}
                                     </TouchableOpacity>
-                                    
+
                                     {/* Nota de la foto */}
                                     {mostrarNotaIndex === index ? (
                                         <View style={styles.notaContainer}>
