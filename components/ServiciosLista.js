@@ -4,7 +4,7 @@ import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
 
 const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
-    const [items, setItems] = useState(initial.map((v, i) => ({ id: `${Date.now()}_${i}`, ...v })) || []);
+    const [items, setItems] = useState(initial || []);
 
     // Calcular totales desde items
     const computeTotalsFromItems = (itemsArr) => {
@@ -14,9 +14,10 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
             if (item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                const cost = parseFloat(item.selected?.comerciable?.precio_cup || '0') || 0;
+                // Los servicios no tienen costo de producto
+                const producto_precio = parseFloat(item.selected.comerciable.precio_cup || "0");
                 totalCobrar += price * qty;
-                totalProfit += (price * qty) - (cost * qty);
+                totalProfit += (price * qty) - (producto_precio * qty);
             }
         });
         return {
@@ -38,6 +39,11 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
             onChange(computeTotalsFromItems(items));
         }
     }, [items]);
+
+    // Actualizar items cuando initial cambie
+    React.useEffect(() => {
+        setItems(initial || []);
+    }, [initial]);
 
     const addItem = () => {
         setItems(prev => ([...prev, {
@@ -90,14 +96,13 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                         <View style={styles.autocompleteContainer}>
                             <ApiAutocomplete
                                 endpoint="/servicio/filter/5/1"
-                                // Pasamos descripcion en el body y le indicamos a ApiAutocomplete
-                                // que use la clave 'descripcion' como campo de búsqueda.
                                 body={{ descripcion: '' }}
                                 searchKey={'descripcion'}
                                 displayFormat={(it) => `${it.descripcion || ''} - $ ${it.comerciable?.precio_cup ?? ''}`}
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar servicio..."
                                 delay={400}
+                                initialValue={entry.selected}
                             />
                         </View>
 
@@ -137,8 +142,9 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        const cost = parseFloat(entry.selected?.comerciable?.precio_cup || '0');
-                                        const profit = (price * qty) - (cost * qty);
+                                        // Los servicios no tienen costo de producto
+                                        const producto_precio = parseFloat(entry.selected.comerciable.precio_cup || "0");
+                                        const profit = (price * qty) - (producto_precio * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}
                                 </Text>

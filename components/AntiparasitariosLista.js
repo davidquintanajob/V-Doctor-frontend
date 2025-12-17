@@ -4,7 +4,7 @@ import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
 
 const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
-    const [items, setItems] = useState(initial.map((v, i) => ({ id: `${Date.now()}_${i}`, ...v })) || []);
+    const [items, setItems] = useState(initial || []);
 
     const computeTotalsFromItems = (itemsArr) => {
         let totalCobrar = 0;
@@ -13,7 +13,8 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
             if (item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                const cost = parseFloat(item.selected.producto?.comerciable?.precio_cup || '0') || 0;
+                // Usar costo_cup del producto, o como fallback el precio del comerciable
+                const cost = parseFloat(item.selected.producto?.precio_cup || item.selected.producto?.comerciable?.precio_cup || '0') || 0;
                 totalCobrar += price * qty;
                 totalProfit += (price * qty) - (cost * qty);
             }
@@ -36,6 +37,11 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
             onChange(computeTotalsFromItems(items), items);
         }
     }, [items]);
+
+    // Actualizar items cuando initial cambie
+    React.useEffect(() => {
+        setItems(initial || []);
+    }, [initial]);
     const addItem = () => {
         setItems(prev => ([...prev, {
             id: `${Date.now()}_${prev.length}`,
@@ -108,6 +114,7 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar antiparasitario..."
                                 delay={400}
+                                initialValue={entry.selected}
                             />
                         </View>
 
@@ -184,7 +191,8 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        const cost = parseFloat(entry.selected.producto?.comerciable?.precio_cup || '0');
+                                        // Usar costo_cup del producto, o como fallback el precio del comerciable
+                                        const cost = parseFloat(entry.selected.producto?.precio_cup || entry.selected.producto?.comerciable?.precio_cup || '0');
                                         const profit = (price * qty) - (cost * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}

@@ -29,16 +29,27 @@ const ApiAutocomplete = ({
   inputStyle,
   resultsContainerStyle,
   itemStyle,
+  initialValue = null, // NUEVA PROPS para valor inicial
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(initialValue); // Inicializar con initialValue
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [error, setError] = useState(null);
   
   const timeoutRef = useRef(null);
   const inputRef = useRef(null);
+
+  // Efecto para inicializar el query cuando hay un initialValue
+  useEffect(() => {
+    if (initialValue) {
+      setSelectedItem(initialValue);
+      // Formatear el texto para mostrar en el input
+      const displayText = displayFormat ? displayFormat(initialValue) : initialValue[displayKey];
+      setQuery(displayText || '');
+    }
+  }, [initialValue, displayFormat, displayKey]);
 
   // Función para buscar en la API
   const searchApi = async (searchQuery) => {
@@ -107,7 +118,7 @@ const ApiAutocomplete = ({
       clearTimeout(timeoutRef.current);
     }
 
-    if (query) {
+    if (query && !selectedItem) { // Solo buscar si no hay item seleccionado
       timeoutRef.current = setTimeout(() => {
         searchApi(query);
       }, delay);
@@ -121,9 +132,7 @@ const ApiAutocomplete = ({
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [query, delay]);
-
-  
+  }, [query, delay, selectedItem]);
 
   const handleItemSelect = (item) => {
     setSelectedItem(item);
@@ -150,7 +159,10 @@ const ApiAutocomplete = ({
   };
 
   const handleInputFocus = () => {
-    if (query && results.length > 0) {
+    // Si hay un item seleccionado, limpiarlo al hacer focus
+    if (selectedItem) {
+      clearSelection();
+    } else if (query && results.length > 0) {
       setShowResults(true);
     }
   };

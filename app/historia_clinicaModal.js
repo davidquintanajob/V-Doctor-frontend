@@ -45,7 +45,7 @@ export default function HistoriaClinicaModalScreen() {
     // Estados principales
     const [consultaData, setConsultaData] = useState({
         id_consulta: consultaParam?.id_consulta ?? null,
-        fecha: consultaParam?.fecha ? new Date(consultaData.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        fecha: consultaParam?.fecha ? new Date(consultaParam.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         motivo: consultaParam?.motivo ?? '',
         diagnostico: consultaParam?.diagnostico ?? '',
         anamnesis: consultaParam?.anamnesis ?? '',
@@ -90,6 +90,13 @@ export default function HistoriaClinicaModalScreen() {
     const [mostrarNotaIndex, setMostrarNotaIndex] = useState(null);
     const [notaActual, setNotaActual] = useState('');
     const [imagenFullscreen, setImagenFullscreen] = useState(null);
+
+    // AGREGAR estos estados después de los otros estados principales (al principio del componente)
+    const [initialMedicamentos, setInitialMedicamentos] = useState([]);
+    const [initialVacunas, setInitialVacunas] = useState([]);
+    const [initialAntiparasitarios, setInitialAntiparasitarios] = useState([]);
+    const [initialServicios, setInitialServicios] = useState([]);
+    const [initialProductos, setInitialProductos] = useState([]);
 
     // Refs para las listas
     const vacunasListRef = React.useRef(null);
@@ -218,7 +225,87 @@ export default function HistoriaClinicaModalScreen() {
                 console.error('Error getting config:', error);
             }
         };
+        const procesarVentasExistentes = () => {
+            if (!consultaParam?.venta || !Array.isArray(consultaParam.venta)) {
+                return;
+            }
+
+            const ventas = consultaParam.venta;
+
+            // Arrays para cada tipo de venta
+            const medicamentosItems = [];
+            const vacunasItems = [];
+            const antiparasitariosItems = [];
+            const serviciosItems = [];
+            const productosItems = [];
+
+            ventas.forEach((venta, index) => {
+                const id = `${Date.now()}_${index}`;
+                const comerciable = venta.comerciable || {};
+                const producto = comerciable.producto || {};
+                const medicamento = producto.medicamento || {};
+
+                // Determinar el tipo de venta
+                if (comerciable.servicio) {
+                    // Es un servicio
+                    serviciosItems.push({
+                        id: id,
+                        selected: comerciable.servicio,
+                        precio_cup: venta.precio_cobrado_cup?.toString() || '',
+                        cantidad: venta.cantidad?.toString() || '1'
+                    });
+                } else if (comerciable.producto) {
+                    // Es un producto o medicamento
+                    if (medicamento.tipo_medicamento) {
+                        // Es un medicamento (antibiótico, vacuna, antiparasitario)
+                        const itemData = {
+                            id: id,
+                            selected: {
+                                producto: producto,
+                                unidad_medida: medicamento.unidad_medida || '',
+                                posologia: medicamento.posologia || ''
+                            },
+                            unidad_medida: medicamento.unidad_medida || '',
+                            categoria: producto.categoria || '',
+                            posologia: medicamento.posologia || '',
+                            precio_cup: venta.precio_cobrado_cup?.toString() || '',
+                            cantidad: venta.cantidad?.toString() || '1'
+                        };
+
+                        switch (medicamento.tipo_medicamento) {
+                            case 'vacuna':
+                                vacunasItems.push(itemData);
+                                break;
+                            case 'antiparasitario':
+                                antiparasitariosItems.push(itemData);
+                                break;
+                            default: // 'antibiótico' u otros tipos de medicamentos
+                                medicamentosItems.push(itemData);
+                                break;
+                        }
+                    } else {
+                        // Es un producto normal (no medicamento)
+                        productosItems.push({
+                            id: id,
+                            selected: producto,
+                            codigo: producto.codigo?.toString() || '',
+                            precio_cup: venta.precio_cobrado_cup?.toString() || '',
+                            cantidad: venta.cantidad?.toString() || '1'
+                        });
+                    }
+                }
+            });
+            
+            // Actualizar los estados iniciales
+            setInitialMedicamentos(medicamentosItems);
+            setInitialVacunas(vacunasItems);
+            setInitialAntiparasitarios(antiparasitariosItems);
+            setInitialServicios(serviciosItems);
+            setInitialProductos(productosItems);
+        };
+
         getConfig();
+        procesarVentasExistentes();
     }, []);
 
     // Cargar usuarios al abrir el modal (bloqueante hasta recibir respuesta)
@@ -283,7 +370,7 @@ export default function HistoriaClinicaModalScreen() {
             if (recordingTimerPatologia) clearInterval(recordingTimerPatologia);
         };
     }, [recordingTimerAnamnesis, recordingTimerDiagnostico, recordingTimerTratamiento, recordingTimerPatologia]);
-
+    
     // Función para convertir URI a base64
     const uriToBase64 = async (uri) => {
         if (!uri) return '';
@@ -1241,22 +1328,22 @@ export default function HistoriaClinicaModalScreen() {
     // Función auxiliar para crear ventas de una lista específica
     const createVentasForList = async (cfgHost, cfgToken, id_consulta, itemsList, tipo, usuariosIds) => {
         if (!itemsList || itemsList.length === 0) return { ok: true, count: 0 };
-        
+
         setValidationTitle(`Creando ventas de ${tipo}...`);
         const total = itemsList.length;
         let done = 0;
-        
+
         for (let i = 0; i < itemsList.length; i++) {
             const entry = itemsList[i];
             const sel = entry.selected || {};
-            
+
             // Construir el payload según el tipo de venta
             let body;
-            
+
             if (tipo === 'servicios') {
                 // Para servicios
                 const comerciable = sel.comerciable || {};
-                
+
                 body = {
                     fecha: new Date(consultaData.fecha).toISOString(),
                     precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
@@ -1273,7 +1360,7 @@ export default function HistoriaClinicaModalScreen() {
                 // Para productos
                 const producto = sel.producto || sel || {};
                 const comerciable = producto.comerciable || sel.comerciable || {};
-                
+
                 body = {
                     fecha: new Date(consultaData.fecha).toISOString(),
                     precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
@@ -1290,7 +1377,7 @@ export default function HistoriaClinicaModalScreen() {
                 // Para medicamentos, vacunas y antiparasitarios
                 const producto = sel.producto || {};
                 const comerciable = producto.comerciable || {};
-                
+
                 body = {
                     fecha: new Date(consultaData.fecha).toISOString(),
                     precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
@@ -1304,18 +1391,18 @@ export default function HistoriaClinicaModalScreen() {
                     id_usuario: usuariosIds || [],
                 };
             }
-            
+
             setValidationTitle(`Creando venta ${i + 1} de ${tipo}...`);
             setVentasCreated(prev => prev + 1);
-            
+
             const url = `${cfgHost.replace(/\/+$/, '')}/venta/create`;
             const headers = { 'Content-Type': 'application/json' };
             if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
-            
+
             const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
             let responseData = null;
             try { responseData = await res.json(); } catch (e) { responseData = null; }
-            
+
             if (!res.ok) {
                 let errorMessage = 'Error desconocido';
                 if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
@@ -1327,17 +1414,17 @@ export default function HistoriaClinicaModalScreen() {
                 } else if (responseData) {
                     errorMessage = JSON.stringify(responseData);
                 }
-                
+
                 Alert.alert(`Error ${res.status} al crear venta de ${tipo}`, errorMessage);
                 return { ok: false, error: errorMessage };
             }
-            
+
             // Avanzar progreso
             done++;
             const pct = 96 + Math.round((done / total) * 4); // Distribuimos el 4% restante para esta lista
             setValidationProgress(pct);
         }
-        
+
         return { ok: true, count: total };
     };
 
@@ -1453,7 +1540,7 @@ export default function HistoriaClinicaModalScreen() {
 
                 // Ahora crear las ventas para todas las listas
                 setValidationProgress(96);
-                
+
                 // Obtener los items de cada lista
                 const medicamentosItems = (medicamentosListRef.current && typeof medicamentosListRef.current.getItems === 'function')
                     ? (medicamentosListRef.current.getItems() || [])
@@ -1470,20 +1557,20 @@ export default function HistoriaClinicaModalScreen() {
                 const productosItems = (productosListRef.current && typeof productosListRef.current.getItems === 'function')
                     ? (productosListRef.current.getItems() || [])
                     : [];
-                
+
                 // Filtrar solo los items que tienen un producto/comerciable seleccionado
                 const medicamentosFiltrados = medicamentosItems.filter(item => item.selected);
                 const vacunasFiltradas = vacunasItems.filter(item => item.selected);
                 const antiparasitariosFiltrados = antiparasitariosItems.filter(item => item.selected);
                 const serviciosFiltrados = serviciosItems.filter(item => item.selected);
                 const productosFiltrados = productosItems.filter(item => item.selected);
-                
+
                 // Calcular el total de ventas a crear
-                const totalVentas = medicamentosFiltrados.length + vacunasFiltradas.length + antiparasitariosFiltrados.length + 
-                                   serviciosFiltrados.length + productosFiltrados.length;
+                const totalVentas = medicamentosFiltrados.length + vacunasFiltradas.length + antiparasitariosFiltrados.length +
+                    serviciosFiltrados.length + productosFiltrados.length;
                 setTotalVentasToCreate(totalVentas);
                 setVentasCreated(0);
-                
+
                 if (totalVentas > 0) {
                     // Crear ventas de medicamentos
                     if (medicamentosFiltrados.length > 0) {
@@ -1494,7 +1581,7 @@ export default function HistoriaClinicaModalScreen() {
                             return;
                         }
                     }
-                    
+
                     // Crear ventas de vacunas
                     if (vacunasFiltradas.length > 0) {
                         const resultVac = await createVentasForList(host, token, idConsultaCreada, vacunasFiltradas, 'vacunas', usuariosIds);
@@ -1503,7 +1590,7 @@ export default function HistoriaClinicaModalScreen() {
                             return;
                         }
                     }
-                    
+
                     // Crear ventas de antiparasitarios
                     if (antiparasitariosFiltrados.length > 0) {
                         const resultAnti = await createVentasForList(host, token, idConsultaCreada, antiparasitariosFiltrados, 'antiparasitarios', usuariosIds);
@@ -1512,7 +1599,7 @@ export default function HistoriaClinicaModalScreen() {
                             return;
                         }
                     }
-                    
+
                     // Crear ventas de servicios
                     if (serviciosFiltrados.length > 0) {
                         const resultServ = await createVentasForList(host, token, idConsultaCreada, serviciosFiltrados, 'servicios', usuariosIds);
@@ -1521,7 +1608,7 @@ export default function HistoriaClinicaModalScreen() {
                             return;
                         }
                     }
-                    
+
                     // Crear ventas de productos
                     if (productosFiltrados.length > 0) {
                         const resultProd = await createVentasForList(host, token, idConsultaCreada, productosFiltrados, 'productos', usuariosIds);
@@ -1534,15 +1621,15 @@ export default function HistoriaClinicaModalScreen() {
 
                 setValidationProgress(100);
                 setValidationTitle('Consulta y ventas creadas correctamente');
-                
-                setTimeout(() => { 
-                    setValidationVisible(false); 
+
+                setTimeout(() => {
+                    setValidationVisible(false);
                     ToastAndroid.show('Consulta creada con éxito', ToastAndroid.LONG);
-                    
+
                     // Redirigir o cerrar el modal
                     router.back();
                 }, 800);
-                
+
             } catch (errCreate) {
                 console.error('Error creando consulta o ventas:', errCreate);
                 Alert.alert('Error', errCreate.message || 'Error desconocido al crear consulta o ventas');
@@ -1761,13 +1848,13 @@ export default function HistoriaClinicaModalScreen() {
                 <View style={styles.loadingOverlay}>
                     <View style={[styles.loadingBox, { width: 300 }]}>
                         <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>{validationTitle}</Text>
-                        
+
                         {totalVentasToCreate > 0 && (
                             <Text style={[styles.loadingText, { marginBottom: Spacing.s }]}>
                                 {ventasCreated} de {totalVentasToCreate} ventas creadas
                             </Text>
                         )}
-                        
+
                         <View style={{ width: '100%', height: 12, backgroundColor: '#eee', borderRadius: 8, overflow: 'hidden' }}>
                             <View style={{ width: `${validationProgress}%`, height: '100%', backgroundColor: Colors.primary }} />
                         </View>
@@ -1870,26 +1957,31 @@ export default function HistoriaClinicaModalScreen() {
                 <MedicamentosLista
                     ref={medicamentosListRef}
                     isEditable={isEditable}
+                    initial={initialMedicamentos}
                     onChange={(t) => setListsTotals(prev => ({ ...prev, medicamentos: t }))}
                 />
                 <ServiciosLista
                     ref={serviciosListRef}
                     isEditable={isEditable}
+                    initial={initialServicios}
                     onChange={(t) => setListsTotals(prev => ({ ...prev, servicios: t }))}
                 />
                 <ProductosList
                     ref={productosListRef}
                     isEditable={isEditable}
+                    initial={initialProductos}
                     onChange={(t) => setListsTotals(prev => ({ ...prev, productos: t }))}
                 />
                 <VacunasLista
                     ref={vacunasListRef}
                     isEditable={isEditable}
+                    initial={initialVacunas}
                     onChange={(t) => setListsTotals(prev => ({ ...prev, vacunas: t }))}
                 />
                 <AntiparasitariosLista
                     ref={antiparasitariosListRef}
                     isEditable={isEditable}
+                    initial={initialAntiparasitarios}
                     onChange={(t) => setListsTotals(prev => ({ ...prev, antiparasitarios: t }))}
                 />
 

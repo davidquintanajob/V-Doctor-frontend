@@ -6,7 +6,7 @@ import QRScannerModal from './QRScannerModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
-    const [items, setItems] = useState(initial.map((v, i) => ({ id: `${Date.now()}_${i}`, ...v })) || []);
+    const [items, setItems] = useState(initial || []);
     const [apiHost, setApiHost] = useState('');
     const [token, setToken] = useState('');
     const [showScannerModal, setShowScannerModal] = useState(false);
@@ -19,9 +19,8 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
                 if (item.selected) {
                     const price = parseFloat(item.precio_cup || '0') || 0;
                     const qty = parseFloat(item.cantidad || '0') || 0;
-                    // Preferir el precio registrado en 'comerciable.precio_cup' como costo de referencia,
-                    // y como fallback usar 'costo_cup' si no existe.
-                    const cost = parseFloat(item.selected?.comerciable?.precio_cup ?? item.selected?.costo_cup ?? '0') || 0;
+                    // Preferir el costo_cup del producto, y como fallback usar el precio del comerciable.
+                    const cost = parseFloat(item.selected?.precio_cup ?? item.selected?.comerciable?.precio_cup ?? '0') || 0;
                     totalCobrar += price * qty;
                     totalProfit += (price * qty) - (cost * qty);
                 }
@@ -45,6 +44,11 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
             onChange(computeTotalsFromItems(items), items);
         }
     }, [items]);
+
+    // Actualizar items cuando initial cambie
+    React.useEffect(() => {
+        setItems(initial || []);
+    }, [initial]);
 
     // Cargar configuración de API
     React.useEffect(() => {
@@ -209,6 +213,7 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar producto..."
                                 delay={400}
+                                initialValue={entry.selected}
                             />
                         </View>
 
@@ -278,8 +283,9 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        const cost = parseFloat(entry.selected?.comerciable?.precio_cup ?? entry.selected?.costo_cup ?? '0');
-                                        const profit = (price * qty) - (cost * qty);
+                                        // Preferir costo_cup del producto, y como fallback usar precio del comerciable
+                                        const producto_precio = parseFloat(entry.selected?.precio_cup ?? entry.selected?.comerciable?.precio_cup ?? '0');
+                                        const profit = (price * qty) - (producto_precio * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}
                                 </Text>

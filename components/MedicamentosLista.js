@@ -4,7 +4,7 @@ import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
 
 const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
-    const [items, setItems] = useState(initial.map((v, i) => ({ id: `${Date.now()}_${i}`, ...v })) || []);
+    const [items, setItems] = useState(initial || []);
 
     const computeTotalsFromItems = (itemsArr) => {
         let totalCobrar = 0;
@@ -13,9 +13,10 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
             if (item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                const cost = parseFloat(item.selected.producto?.comerciable?.precio_cup || '0') || 0;
+                // Usar costo_cup del producto, o como fallback el precio del comerciable
+                const precio_medicamento = parseFloat(item.selected.producto?.precio_cup || item.selected.producto?.comerciable?.precio_cup || '0') || 0;
                 totalCobrar += price * qty;
-                totalProfit += (price * qty) - (cost * qty);
+                totalProfit += (price * qty) - (precio_medicamento * qty);
             }
         });
         return {
@@ -37,6 +38,11 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
             onChange(computeTotalsFromItems(items), items);
         }
     }, [items]);
+
+    // Actualizar items cuando initial cambie
+    React.useEffect(() => {
+        setItems(initial || []);
+    }, [initial]);
 
     const addItem = () => {
         setItems(prev => ([...prev, {
@@ -110,6 +116,7 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar medicamento..."
                                 delay={400}
+                                initialValue={entry.selected}
                             />
                         </View>
 
@@ -186,8 +193,9 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        const cost = parseFloat(entry.selected.producto?.comerciable?.precio_cup || '0');
-                                        const profit = (price * qty) - (cost * qty);
+                                        // Usar costo_cup del producto, o como fallback el precio del comerciable
+                                        const producto_precio = parseFloat(entry.selected.producto?.precio_cup || entry.selected.producto?.comerciable?.precio_cup || '0');
+                                        const profit = (price * qty) - (producto_precio * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}
                                 </Text>
