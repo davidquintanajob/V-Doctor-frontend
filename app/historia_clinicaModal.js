@@ -45,7 +45,7 @@ export default function HistoriaClinicaModalScreen() {
     // Estados principales
     const [consultaData, setConsultaData] = useState({
         id_consulta: consultaParam?.id_consulta ?? null,
-        fecha: consultaParam?.fecha ? new Date(consultaParam.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        fecha: consultaParam?.fecha ? new Date(consultaData.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         motivo: consultaParam?.motivo ?? '',
         diagnostico: consultaParam?.diagnostico ?? '',
         anamnesis: consultaParam?.anamnesis ?? '',
@@ -129,6 +129,10 @@ export default function HistoriaClinicaModalScreen() {
     const [validationProgress, setValidationProgress] = useState(0);
     const [validationTitle, setValidationTitle] = useState('');
 
+    // Estados para el conteo de ventas creadas
+    const [ventasCreated, setVentasCreated] = useState(0);
+    const [totalVentasToCreate, setTotalVentasToCreate] = useState(0);
+
     // (List states removed)
 
     // Dentro del componente HistoriaClinicaModalScreen, agrega este useEffect:
@@ -140,7 +144,6 @@ export default function HistoriaClinicaModalScreen() {
             // Si estamos en modo ver/editar y hay fotos existentes
             if ((mode === 'ver' || mode === 'editar') && consultaParam.foto_consulta.length > 0) {
                 try {
-                    console.log('Cargando fotos existentes...');
 
                     // Para no bloquear la UI, cargamos las fotos una por una
                     const fotosCargadas = [];
@@ -148,7 +151,6 @@ export default function HistoriaClinicaModalScreen() {
                     for (const foto of consultaParam.foto_consulta) {
                         // Construir URL completa de la imagen
                         const imageUrl = `${apiHost}${foto.ruta}`;
-                        console.log('Cargando imagen:', imageUrl);
 
                         // Intentar convertir a base64
                         const base64Data = await uriToBase64(imageUrl);
@@ -160,7 +162,6 @@ export default function HistoriaClinicaModalScreen() {
                                 nota: foto.nota || '',
                                 id_foto_consulta: foto.id_foto_consulta
                             });
-                            console.log('Imagen cargada exitosamente');
                         } else {
                             console.warn('No se pudo cargar la imagen:', imageUrl);
                             // Aún así agregamos la foto con la URL para mostrar (pero sin base64)
@@ -174,7 +175,6 @@ export default function HistoriaClinicaModalScreen() {
                     }
 
                     setFotos(fotosCargadas);
-                    console.log('Fotos cargadas:', fotosCargadas.length);
 
                 } catch (error) {
                     console.error('Error cargando fotos existentes:', error);
@@ -191,7 +191,7 @@ export default function HistoriaClinicaModalScreen() {
         };
 
         cargarFotosExistentes();
-    }, [consultaParam, apiHost, mode]);
+    }, [consultaParam]);
 
     // Inicializar API host
     useEffect(() => {
@@ -1238,7 +1238,110 @@ export default function HistoriaClinicaModalScreen() {
         }
     };
 
-    // Crear consulta (usa validaciones). Por ahora no realiza la creación final (comentada)
+    // Función auxiliar para crear ventas de una lista específica
+    const createVentasForList = async (cfgHost, cfgToken, id_consulta, itemsList, tipo, usuariosIds) => {
+        if (!itemsList || itemsList.length === 0) return { ok: true, count: 0 };
+        
+        setValidationTitle(`Creando ventas de ${tipo}...`);
+        const total = itemsList.length;
+        let done = 0;
+        
+        for (let i = 0; i < itemsList.length; i++) {
+            const entry = itemsList[i];
+            const sel = entry.selected || {};
+            
+            // Construir el payload según el tipo de venta
+            let body;
+            
+            if (tipo === 'servicios') {
+                // Para servicios
+                const comerciable = sel.comerciable || {};
+                
+                body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: 0, // Los servicios no tienen costo de producto
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_consulta: id_consulta,
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+            } else if (tipo === 'productos') {
+                // Para productos
+                const producto = sel.producto || sel || {};
+                const comerciable = producto.comerciable || sel.comerciable || {};
+                
+                body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: parseFloat(producto.costo_cup || producto.costo_producto_cup || 0) || 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_consulta: id_consulta,
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+            } else {
+                // Para medicamentos, vacunas y antiparasitarios
+                const producto = sel.producto || {};
+                const comerciable = producto.comerciable || {};
+                
+                body = {
+                    fecha: new Date(consultaData.fecha).toISOString(),
+                    precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
+                    costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_consulta: id_consulta,
+                    id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+            }
+            
+            setValidationTitle(`Creando venta ${i + 1} de ${tipo}...`);
+            setVentasCreated(prev => prev + 1);
+            
+            const url = `${cfgHost.replace(/\/+$/, '')}/venta/create`;
+            const headers = { 'Content-Type': 'application/json' };
+            if (cfgToken) headers['Authorization'] = `Bearer ${cfgToken}`;
+            
+            const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+            let responseData = null;
+            try { responseData = await res.json(); } catch (e) { responseData = null; }
+            
+            if (!res.ok) {
+                let errorMessage = 'Error desconocido';
+                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                    errorMessage = responseData.errors.join('\n• ');
+                } else if (responseData && typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                } else if (responseData && (responseData.message || responseData.description)) {
+                    errorMessage = responseData.message || responseData.description;
+                } else if (responseData) {
+                    errorMessage = JSON.stringify(responseData);
+                }
+                
+                Alert.alert(`Error ${res.status} al crear venta de ${tipo}`, errorMessage);
+                return { ok: false, error: errorMessage };
+            }
+            
+            // Avanzar progreso
+            done++;
+            const pct = 96 + Math.round((done / total) * 4); // Distribuimos el 4% restante para esta lista
+            setValidationProgress(pct);
+        }
+        
+        return { ok: true, count: total };
+    };
+
+    // Crear consulta (usa validaciones) y luego crear las ventas
     const handleCreate = async () => {
         setLoading(true);
         try {
@@ -1267,15 +1370,15 @@ export default function HistoriaClinicaModalScreen() {
 
             // Primero validar Medicamentos
             const vm = await validateMedicamentos(host, token, usuariosIds);
-            if (!vm.ok) return; // ya mostramos error dentro
+            if (!vm.ok) return;
 
             // Validar Servicios
             const vs = await validateServicios(host, token, usuariosIds);
-            if (!vs.ok) return; // error mostrado dentro
+            if (!vs.ok) return;
 
             // Validar Productos
             const vp = await validateProductos(host, token, usuariosIds);
-            if (!vp.ok) return; // error mostrado dentro
+            if (!vp.ok) return;
 
             // Validar Vacunas
             const vv = await validateVacunas(host, token, usuariosIds);
@@ -1304,7 +1407,7 @@ export default function HistoriaClinicaModalScreen() {
                 patologia: consultaData.patologia,
                 id_paciente: consultaData.id_paciente || pacienteParam?.id_paciente || pacienteParam?.id || null,
                 id_usuario: cfg.usuario?.id_usuario || cfg.usuario?.id || null,
-                fotos: fotosPayload, // Agregar el array de fotos
+                fotos: fotosPayload,
             };
 
             try {
@@ -1332,22 +1435,124 @@ export default function HistoriaClinicaModalScreen() {
                     return;
                 }
 
-                // Aquí se crearían las ventas (comentado por ahora)
-                // TODO: crear ventas usando los endpoints correspondientes
+                // Obtener el ID de la consulta creada
+                let idConsultaCreada = null;
+                if (responseCreateData && responseCreateData.data && responseCreateData.data.id_consulta) {
+                    idConsultaCreada = responseCreateData.data.id_consulta;
+                } else if (responseCreateData && responseCreateData.id_consulta) {
+                    idConsultaCreada = responseCreateData.id_consulta;
+                } else if (responseCreateData && responseCreateData.consulta && responseCreateData.consulta.id_consulta) {
+                    idConsultaCreada = responseCreateData.consulta.id_consulta;
+                }
+
+                if (!idConsultaCreada) {
+                    Alert.alert('Error', 'No se pudo obtener el ID de la consulta creada');
+                    setValidationVisible(false);
+                    return;
+                }
+
+                // Ahora crear las ventas para todas las listas
+                setValidationProgress(96);
+                
+                // Obtener los items de cada lista
+                const medicamentosItems = (medicamentosListRef.current && typeof medicamentosListRef.current.getItems === 'function')
+                    ? (medicamentosListRef.current.getItems() || [])
+                    : [];
+                const vacunasItems = (vacunasListRef.current && typeof vacunasListRef.current.getItems === 'function')
+                    ? (vacunasListRef.current.getItems() || [])
+                    : [];
+                const antiparasitariosItems = (antiparasitariosListRef.current && typeof antiparasitariosListRef.current.getItems === 'function')
+                    ? (antiparasitariosListRef.current.getItems() || [])
+                    : [];
+                const serviciosItems = (serviciosListRef.current && typeof serviciosListRef.current.getItems === 'function')
+                    ? (serviciosListRef.current.getItems() || [])
+                    : [];
+                const productosItems = (productosListRef.current && typeof productosListRef.current.getItems === 'function')
+                    ? (productosListRef.current.getItems() || [])
+                    : [];
+                
+                // Filtrar solo los items que tienen un producto/comerciable seleccionado
+                const medicamentosFiltrados = medicamentosItems.filter(item => item.selected);
+                const vacunasFiltradas = vacunasItems.filter(item => item.selected);
+                const antiparasitariosFiltrados = antiparasitariosItems.filter(item => item.selected);
+                const serviciosFiltrados = serviciosItems.filter(item => item.selected);
+                const productosFiltrados = productosItems.filter(item => item.selected);
+                
+                // Calcular el total de ventas a crear
+                const totalVentas = medicamentosFiltrados.length + vacunasFiltradas.length + antiparasitariosFiltrados.length + 
+                                   serviciosFiltrados.length + productosFiltrados.length;
+                setTotalVentasToCreate(totalVentas);
+                setVentasCreated(0);
+                
+                if (totalVentas > 0) {
+                    // Crear ventas de medicamentos
+                    if (medicamentosFiltrados.length > 0) {
+                        const resultMed = await createVentasForList(host, token, idConsultaCreada, medicamentosFiltrados, 'medicamentos', usuariosIds);
+                        if (!resultMed.ok) {
+                            // Error ya fue manejado dentro de la función
+                            setValidationVisible(false);
+                            return;
+                        }
+                    }
+                    
+                    // Crear ventas de vacunas
+                    if (vacunasFiltradas.length > 0) {
+                        const resultVac = await createVentasForList(host, token, idConsultaCreada, vacunasFiltradas, 'vacunas', usuariosIds);
+                        if (!resultVac.ok) {
+                            setValidationVisible(false);
+                            return;
+                        }
+                    }
+                    
+                    // Crear ventas de antiparasitarios
+                    if (antiparasitariosFiltrados.length > 0) {
+                        const resultAnti = await createVentasForList(host, token, idConsultaCreada, antiparasitariosFiltrados, 'antiparasitarios', usuariosIds);
+                        if (!resultAnti.ok) {
+                            setValidationVisible(false);
+                            return;
+                        }
+                    }
+                    
+                    // Crear ventas de servicios
+                    if (serviciosFiltrados.length > 0) {
+                        const resultServ = await createVentasForList(host, token, idConsultaCreada, serviciosFiltrados, 'servicios', usuariosIds);
+                        if (!resultServ.ok) {
+                            setValidationVisible(false);
+                            return;
+                        }
+                    }
+                    
+                    // Crear ventas de productos
+                    if (productosFiltrados.length > 0) {
+                        const resultProd = await createVentasForList(host, token, idConsultaCreada, productosFiltrados, 'productos', usuariosIds);
+                        if (!resultProd.ok) {
+                            setValidationVisible(false);
+                            return;
+                        }
+                    }
+                }
 
                 setValidationProgress(100);
-                setValidationTitle('Consulta creada correctamente');
-                setTimeout(() => { setValidationVisible(false); }, 800);
-                ToastAndroid.show('Consulta creada', ToastAndroid.SHORT);
+                setValidationTitle('Consulta y ventas creadas correctamente');
+                
+                setTimeout(() => { 
+                    setValidationVisible(false); 
+                    ToastAndroid.show('Consulta creada con éxito', ToastAndroid.LONG);
+                    
+                    // Redirigir o cerrar el modal
+                    router.back();
+                }, 800);
+                
             } catch (errCreate) {
-                console.error('Error creando consulta:', errCreate);
-                Alert.alert('Error', errCreate.message || 'Error desconocido');
+                console.error('Error creando consulta o ventas:', errCreate);
+                Alert.alert('Error', errCreate.message || 'Error desconocido al crear consulta o ventas');
                 setValidationVisible(false);
                 return;
             }
         } catch (err) {
             console.error('Error en handleCreate:', err);
             Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
         } finally {
             setLoading(false);
         }
@@ -1556,6 +1761,13 @@ export default function HistoriaClinicaModalScreen() {
                 <View style={styles.loadingOverlay}>
                     <View style={[styles.loadingBox, { width: 300 }]}>
                         <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>{validationTitle}</Text>
+                        
+                        {totalVentasToCreate > 0 && (
+                            <Text style={[styles.loadingText, { marginBottom: Spacing.s }]}>
+                                {ventasCreated} de {totalVentasToCreate} ventas creadas
+                            </Text>
+                        )}
+                        
                         <View style={{ width: '100%', height: 12, backgroundColor: '#eee', borderRadius: 8, overflow: 'hidden' }}>
                             <View style={{ width: `${validationProgress}%`, height: '100%', backgroundColor: Colors.primary }} />
                         </View>
