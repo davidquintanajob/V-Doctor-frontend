@@ -14,8 +14,9 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
             if (item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                // Usar costo_cup del producto, o como fallback el precio del comerciable
-                const cost = parseFloat(item.selected.producto?.precio_cup || item.selected.producto?.comerciable?.precio_cup || '0') || 0;
+                // Preferir el precio original del comerciable (cuando viene en `initial`),
+                // luego el costo/precio del producto y como fallback el precio del comerciable
+                const cost = parseFloat(item.precio_original_comerciable_cup ?? item.selected.producto?.precio_cup ?? item.selected.producto?.comerciable?.precio_cup ?? '0') || 0;
                 totalCobrar += price * qty;
                 totalProfit += (price * qty) - (cost * qty);
             }
@@ -193,8 +194,9 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        // Usar costo_cup del producto, o como fallback el precio del comerciable
-                                        const cost = parseFloat(entry.selected.producto?.precio_cup || entry.selected.producto?.comerciable?.precio_cup || '0');
+                                        // Preferir el precio original del comerciable (cuando viene en `initial`),
+                                        // luego el costo/precio del producto y como fallback el precio del comerciable
+                                        const cost = parseFloat(entry.precio_original_comerciable_cup ?? entry.selected.producto?.precio_cup ?? entry.selected.producto?.comerciable?.precio_cup ?? '0');
                                         const profit = (price * qty) - (cost * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}

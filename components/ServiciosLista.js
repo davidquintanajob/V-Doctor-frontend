@@ -14,8 +14,9 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
             if (item && item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                // Los servicios no tienen costo de producto; proteger con optional chaining
-                const producto_precio = parseFloat(item.selected?.comerciable?.precio_cup || "0");
+                // Preferir el precio original del comerciable (cuando viene en `initial`),
+                // luego usar el precio del comerciable del servicio
+                const producto_precio = parseFloat(item.precio_original_comerciable_cup ?? item.selected?.comerciable?.precio_cup ?? "0");
                 totalCobrar += price * qty;
                 totalProfit += (price * qty) - (producto_precio * qty);
             }
@@ -142,8 +143,9 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        // Los servicios no tienen costo de producto; proteger con optional chaining
-                                        const producto_precio = parseFloat(entry.selected?.comerciable?.precio_cup || "0");
+                                        // Preferir el precio original del comerciable (cuando viene en `initial`),
+                                        // luego usar el precio del comerciable del servicio
+                                        const producto_precio = parseFloat(entry.precio_original_comerciable_cup ?? entry.selected?.comerciable?.precio_cup ?? "0");
                                         const profit = (price * qty) - (producto_precio * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}

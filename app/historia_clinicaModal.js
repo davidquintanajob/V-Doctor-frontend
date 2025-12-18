@@ -252,7 +252,8 @@ export default function HistoriaClinicaModalScreen() {
                         id: id,
                         selected: comerciable.servicio,
                         precio_cup: venta.precio_cobrado_cup?.toString() || '',
-                        cantidad: venta.cantidad?.toString() || '1'
+                        cantidad: venta.cantidad?.toString() || '1',
+                        precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined)
                     });
                 } else if (comerciable.producto) {
                     // Es un producto o medicamento
@@ -269,7 +270,8 @@ export default function HistoriaClinicaModalScreen() {
                             categoria: producto.categoria || '',
                             posologia: medicamento.posologia || '',
                             precio_cup: venta.precio_cobrado_cup?.toString() || '',
-                            cantidad: venta.cantidad?.toString() || '1'
+                            cantidad: venta.cantidad?.toString() || '1',
+                            precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined)
                         };
 
                         switch (medicamento.tipo_medicamento) {
@@ -284,15 +286,20 @@ export default function HistoriaClinicaModalScreen() {
                                 break;
                         }
                     } else {
-                        // Es un producto normal (no medicamento)
-                        productosItems.push({
-                            id: id,
-                            selected: producto,
-                            codigo: producto.codigo?.toString() || '',
-                            precio_cup: venta.precio_cobrado_cup?.toString() || '',
-                            cantidad: venta.cantidad?.toString() || '1'
-                        });
-                    }
+                            // Es un producto normal (no medicamento)
+                            // Mapear los datos de la venta a la estructura que espera la lista
+                            productosItems.push({
+                                id: (venta.id_venta != null) ? String(venta.id_venta) : `${Date.now()}_${index}`,
+                                selected: producto,
+                                codigo: producto.codigo?.toString() || '',
+                                // precio de la venta (lo cobrado)
+                                precio_cup: venta.precio_cobrado_cup?.toString() || '',
+                                // cantidad vendida
+                                cantidad: venta.cantidad?.toString() || '1',
+                                // precio original del comerciable (necesario para calcular el plus)
+                                precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined)
+                            });
+                        }
                 }
             });
             
@@ -332,6 +339,9 @@ export default function HistoriaClinicaModalScreen() {
 
                 setUsuariosDisponibles(json);
 
+                // Construir lista inicial de preseleccionados: posible usuario desde config
+                const initialPreselected = [];
+
                 // Revisar config de usuario para preseleccionar si aplica
                 try {
                     // Try both keys: older code may have stored @config.userConfig, but login stores @config
@@ -343,12 +353,53 @@ export default function HistoriaClinicaModalScreen() {
                         if (currentId) {
                             const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
                             if (found) {
-                                setUsuariosPreseleccionados([found]);
+                                initialPreselected.push(found);
                             }
                         }
                     }
                 } catch (err) {
                     console.error('Error reading config from AsyncStorage', err);
+                }
+
+                // Si el modal recibió una consulta con ventas, extraer todos los usuarios de todas las ventas
+                // y agregarlos a la preselección (sin duplicados).
+                try {
+                    if (consultaParam?.venta && Array.isArray(consultaParam.venta)) {
+                        for (const venta of consultaParam.venta) {
+                            const ventaUsuarios = venta?.usuarios;
+                            if (!ventaUsuarios) continue;
+
+                            if (Array.isArray(ventaUsuarios)) {
+                                for (const u of ventaUsuarios) {
+                                    const key = u?.id_usuario ?? u?.id;
+                                    if (key == null) continue;
+                                    // Preferir la entidad completa presente en `json` (usuariosDisponibles) si existe
+                                    const foundInAll = json.find(au => au.id_usuario === key || au.id === key);
+                                    initialPreselected.push(foundInAll || u);
+                                }
+                            } else if (typeof ventaUsuarios === 'object') {
+                                const u = ventaUsuarios;
+                                const key = u?.id_usuario ?? u?.id;
+                                if (key != null) {
+                                    const foundInAll = json.find(au => au.id_usuario === key || au.id === key);
+                                    initialPreselected.push(foundInAll || u);
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error extracting usuarios from consultaParam.venta', err);
+                }
+
+                // Eliminar duplicados por id_usuario / id y asignar al estado si hay alguno
+                if (initialPreselected.length > 0) {
+                    const map = new Map();
+                    initialPreselected.forEach(u => {
+                        const key = u?.id_usuario ?? u?.id;
+                        if (key != null && !map.has(String(key))) map.set(String(key), u);
+                    });
+                    const merged = Array.from(map.values());
+                    if (merged.length > 0) setUsuariosPreseleccionados(merged);
                 }
             } catch (error) {
                 console.error('Error fetching usuarios:', error);
@@ -1987,9 +2038,9 @@ export default function HistoriaClinicaModalScreen() {
 
                 {/* Contenedor de Resumen de Totales */}
                 {(() => {
-                    // Usar totales provistos por cada lista (actualizados vía onChange)
-                    const totalCobrar = Object.values(listsTotals).reduce((s, v) => s + (parseFloat(v.totalCobrar || 0) || 0), 0);
-                    const totalProfit = Object.values(listsTotals).reduce((s, v) => s + (parseFloat(v.totalProfit || 0) || 0), 0);
+                    // Usar totales calculados directamente desde los refs de las listas
+                    // Esto evita inconsistencias al cargar datos iniciales (modo ver/editar)
+                    const { totalCobrar, totalProfit } = calculateTotals();
 
                     // Determinar descuento del paciente buscando en distintos lugares según cómo se abrió el modal
                     const descuentoPaciente = (
