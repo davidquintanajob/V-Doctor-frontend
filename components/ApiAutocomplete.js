@@ -32,6 +32,7 @@ const ApiAutocomplete = ({
   initialValue = null, // NUEVA PROPS para valor inicial
 }) => {
   const [query, setQuery] = useState('');
+  const [queryLimpia, setQueryLimpia] = useState(''); // Estado separado para la query limpia
   const [results, setResults] = useState([]);
   const [selectedItem, setSelectedItem] = useState(initialValue); // Inicializar con initialValue
   const [isLoading, setIsLoading] = useState(false);
@@ -48,12 +49,16 @@ const ApiAutocomplete = ({
       // Formatear el texto para mostrar en el input
       const displayText = displayFormat ? displayFormat(initialValue) : initialValue[displayKey];
       setQuery(displayText || '');
+      setQueryLimpia(displayText?.trimEnd() || '');
     }
   }, [initialValue, displayFormat, displayKey]);
 
   // Función para buscar en la API
   const searchApi = async (searchQuery) => {
-    if (!searchQuery.trim()) {
+    // Limpiar espacios al final solo para la búsqueda
+    const queryLimpia = searchQuery.trimEnd();
+    
+    if (!queryLimpia) { // Verificar si está vacío después de limpiar
       setResults([]);
       setShowResults(false);
       return;
@@ -78,9 +83,10 @@ const ApiAutocomplete = ({
       // Combinar el body base con la query de búsqueda.
       // Usamos `searchKey` para que el componente pueda enviar la query
       // bajo la clave que el endpoint espere (p. ej. 'descripcion').
+      // Usamos queryLimpia (sin espacios al final)
       const requestBody = {
         ...body,
-        [searchKey]: searchQuery,
+        [searchKey]: queryLimpia,
       };
 
       const response = await fetch(url, {
@@ -118,9 +124,17 @@ const ApiAutocomplete = ({
       clearTimeout(timeoutRef.current);
     }
 
-    if (query && !selectedItem) { // Solo buscar si no hay item seleccionado
+    // Solo buscar si no hay item seleccionado
+    if (query && !selectedItem) {
       timeoutRef.current = setTimeout(() => {
-        searchApi(query);
+        // Usar trimEnd() solo al momento de buscar
+        const queryParaBuscar = query.trimEnd();
+        if (queryParaBuscar) {
+          searchApi(queryParaBuscar);
+        } else {
+          setResults([]);
+          setShowResults(false);
+        }
       }, delay);
     } else {
       setResults([]);
@@ -136,7 +150,9 @@ const ApiAutocomplete = ({
 
   const handleItemSelect = (item) => {
     setSelectedItem(item);
-    setQuery(displayFormat ? displayFormat(item) : item[displayKey]);
+    const displayText = displayFormat ? displayFormat(item) : item[displayKey];
+    setQuery(displayText);
+    setQueryLimpia(displayText?.trimEnd() || '');
     setShowResults(false);
     setResults([]);
     
@@ -150,6 +166,7 @@ const ApiAutocomplete = ({
   const clearSelection = () => {
     setSelectedItem(null);
     setQuery('');
+    setQueryLimpia('');
     setResults([]);
     setShowResults(false);
     
@@ -168,7 +185,9 @@ const ApiAutocomplete = ({
   };
 
   const handleInputChange = (text) => {
+    // Permitir espacios normales mientras escribe
     setQuery(text);
+    
     if (!text) {
       clearSelection();
     }

@@ -41,7 +41,7 @@ export default function LoginScreen() {
         router.replace('/config');
         return;
       }
-      
+
       const parsed = JSON.parse(raw);
       const host = parsed?.api_host || parsed?.apihost || parsed?.apiHost;
       if (!host) {
@@ -73,9 +73,9 @@ export default function LoginScreen() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          nombre_usuario: nombre, 
-          contrasenna: contrasenna 
+        body: JSON.stringify({
+          nombre_usuario: nombre,
+          contrasenna: contrasenna
         }),
       });
 
@@ -89,7 +89,7 @@ export default function LoginScreen() {
         } else if (responseData.message) {
           errorMessage = responseData.message;
         }
-        
+
         Alert.alert(
           `Error ${response.status}`,
           errorMessage,
@@ -107,12 +107,12 @@ export default function LoginScreen() {
           token: responseData.token,
           refreshToken: responseData.refreshToken
         };
-        
+
         await AsyncStorage.setItem('@config', JSON.stringify(userConfig));
-        
+
         // Mostrar mensaje de éxito
         setSuccessMessage(`¡Bienvenido ${responseData.usuario.nombre}!`);
-        
+
         // Navegar después de un breve delay para que se vea el mensaje
         setTimeout(() => {
           router.replace('/');
@@ -165,11 +165,21 @@ export default function LoginScreen() {
               style={styles.input}
               placeholder="Usuario"
               value={nombre}
-              onChangeText={setNombre}
+              onChangeText={(text) => {
+                setNombre(text);
+                const timeout = setTimeout(() => {
+                  const limpio = text.trimEnd();
+                  if (text !== limpio) {
+                    setNombre(limpio);
+                  }
+                }, 1000);
+                // Esto limpia el timeout anterior en cada cambio
+                return () => clearTimeout(timeout);
+              }}
               autoCapitalize="none"
               editable={!loading}
             />
-            
+
             {/* Campo de contraseña con ojo */}
             <View style={styles.passwordContainer}>
               <TextInput
@@ -180,14 +190,14 @@ export default function LoginScreen() {
                 secureTextEntry={!showPassword}
                 editable={!loading}
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={toggleShowPassword}
                 disabled={loading}
               >
                 <Image
                   source={
-                    showPassword 
+                    showPassword
                       ? require('../assets/images/eye-open.png')
                       : require('../assets/images/eye-closed.png')
                   }
@@ -212,25 +222,25 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { 
-    flex: 1, 
-    backgroundColor: '#fff' 
+  safe: {
+    flex: 1,
+    backgroundColor: '#fff'
   },
-  container: { 
-    flex: 1, 
-    padding: 20, 
-    alignItems: 'center', 
-    marginTop: 50 
+  container: {
+    flex: 1,
+    padding: 20,
+    alignItems: 'center',
+    marginTop: 50
   },
-  header: { 
-    width: '100%', 
-    height: 40, 
-    justifyContent: 'center' 
+  header: {
+    width: '100%',
+    height: 40,
+    justifyContent: 'center'
   },
-  backButton: { 
-    position: 'absolute', 
-    left: 0, 
-    padding: 8, 
+  backButton: {
+    position: 'absolute',
+    left: 0,
+    padding: 8,
     backgroundColor: Colors.primarySuave,
     borderRadius: 8,
   },
@@ -239,32 +249,32 @@ const styles = StyleSheet.create({
     height: 30,
     tintColor: Colors.textPrimary,
   },
-  logoBox: { 
-    width: '100%', 
-    alignItems: 'center', 
-    marginTop: 10, 
-    marginBottom: 6 
+  logoBox: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 6
   },
-  logo: { 
-    width: 140, 
-    height: 120 
+  logo: {
+    width: 140,
+    height: 120
   },
-  title: { 
-    fontSize: 22, 
-    fontWeight: '700', 
-    color: Colors.primary, 
-    marginBottom: 10 
+  title: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: 10
   },
-  form: { 
-    width: '100%', 
-    marginTop: 10 
+  form: {
+    width: '100%',
+    marginTop: 10
   },
-  input: { 
-    borderWidth: 1, 
-    borderColor: '#ddd', 
-    borderRadius: 8, 
-    padding: 12, 
-    marginBottom: 12 
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12
   },
   passwordContainer: {
     position: 'relative',
@@ -288,15 +298,15 @@ const styles = StyleSheet.create({
     height: 24,
     tintColor: Colors.primary,
   },
-  button: { 
-    backgroundColor: Colors.primary, 
-    padding: 14, 
-    borderRadius: 8, 
+  button: {
+    backgroundColor: Colors.primary,
+    padding: 14,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 10,
   },
-  buttonText: { 
-    color: '#fff', 
+  buttonText: {
+    color: '#fff',
     fontWeight: '700',
     fontSize: 16,
   },
