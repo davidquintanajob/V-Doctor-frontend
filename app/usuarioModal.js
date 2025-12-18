@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -20,6 +20,9 @@ import DropdownGenerico from '../components/DropdownGenerico';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
 import { Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
+import { MediaType } from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -53,10 +56,78 @@ export default function UsuarioModalScreen() {
         return null;
     });
 
+    // Agrega esta función en tu componente (después de los estados)
+    const normalizarRutaFoto = (ruta) => {
+        if (!ruta) return null;
+
+        // Eliminar barras dobles y barras invertidas
+        let rutaNormalizada = ruta.replace(/\\\\/g, '/').replace(/\\/g, '/');
+
+        // Eliminar el prefijo "fotos/" si ya existe
+        if (rutaNormalizada.startsWith('fotos/')) {
+            rutaNormalizada = rutaNormalizada.substring(6); // Eliminar "fotos/"
+        }
+
+        // Asegurar que no empiece con /
+        if (rutaNormalizada.startsWith('/')) {
+            rutaNormalizada = rutaNormalizada.substring(1);
+        }
+
+        return rutaNormalizada;
+    };
+
     const [contrasenna, setContrasenna] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [contrasennaErrors, setContrasennaErrors] = useState([]);
     const [activo, setActivo] = useState(usuario?.activo ?? true);
+
+    // Estado para la foto firma
+    // Modifica la inicialización del estado fotoFirma
+    const [fotoFirma, setFotoFirma] = useState(() => {
+        if (usuario?.foto_firma) {
+            // Normalizar la ruta
+            const rutaNormalizada = normalizarRutaFoto(usuario.foto_firma);
+
+            // Verificar configuración para construir la URL completa
+            // Nota: esto se hará en un useEffect porque necesitamos AsyncStorage
+            return {
+                uri: null, // Se establecerá después
+                base64: null, // No tenemos base64 inicialmente
+                ruta: rutaNormalizada, // Guardamos la ruta
+                esRemota: true
+            };
+        }
+        return null;
+    });
+
+    // Agregar un useEffect para cargar la imagen remota cuando se tengan los datos de configuración
+    useEffect(() => {
+        const cargarFotoRemota = async () => {
+            if (fotoFirma?.esRemota && fotoFirma?.ruta && !fotoFirma.uri) {
+                try {
+                    const rawConfig = await AsyncStorage.getItem('@config');
+                    if (rawConfig) {
+                        const parsedConfig = JSON.parse(rawConfig);
+                        const host = parsedConfig?.api_host || parsedConfig?.apihost || parsedConfig?.apiHost;
+
+                        if (host) {
+                            const base = host.replace(/\/+$/, '');
+                            const urlFoto = `${base}/${fotoFirma.ruta}`;
+
+                            setFotoFirma(prev => ({
+                                ...prev,
+                                uri: urlFoto
+                            }));
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error al cargar foto remota:', error);
+                }
+            }
+        };
+
+        cargarFotoRemota();
+    }, [fotoFirma]);
 
     const handleMenuNavigate = (link) => {
         // Navegación del menú si es necesario
@@ -65,6 +136,7 @@ export default function UsuarioModalScreen() {
     const handleBack = () => {
         router.back();
     };
+
 
     // Validar contraseña y devolver errores
     const validateContrasenna = (pwd) => {
@@ -78,6 +150,137 @@ export default function UsuarioModalScreen() {
             }
         }
         return errors;
+    };
+
+    // Función para convertir URI a base64
+    const uriToBase64 = async (uri) => {
+        if (!uri) return '';
+
+        // Si ya es una URI local (comienza con file://, content://, etc.)
+        if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith(FileSystem.documentDirectory)) {
+            try {
+                const b64 = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
+                return b64;
+            } catch (readErr) {
+                console.warn('Fallo al leer imagen local:', readErr);
+                return '';
+            }
+        }
+
+        // Si es una URL HTTP/HTTPS (imagen remota)
+        if (uri.startsWith('http://') || uri.startsWith('https://')) {
+            try {
+                // 1. Descargar la imagen a un archivo temporal
+                const filename = uri.split('/').pop() || `image_${Date.now()}.jpg`;
+                const fileUri = FileSystem.cacheDirectory + filename;
+
+                // Configurar headers si es necesario (ej: autenticación)
+                const downloadOptions = {};
+                // No token here, but if needed, add
+
+                const downloadResult = await FileSystem.downloadAsync(uri, fileUri, downloadOptions);
+
+                // 2. Leer el archivo descargado como base64
+                const b64 = await FileSystem.readAsStringAsync(downloadResult.uri, {
+                    encoding: 'base64'
+                });
+
+                // 3. Opcional: limpiar el archivo temporal
+                try {
+                    await FileSystem.deleteAsync(downloadResult.uri, { idempotent: true });
+                } catch (e) { /* ignorar error de limpieza */ }
+
+                return b64;
+            } catch (error) {
+                console.warn('Fallo al descargar/convertir imagen remota:', error);
+                return '';
+            }
+        }
+
+        console.warn('URI no reconocida:', uri);
+        return '';
+    };
+
+    // Función para abrir la cámara
+    const openCamera = async () => {
+        try {
+            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la cámara.');
+                return;
+            }
+
+            const result = await ImagePicker.launchCameraAsync({
+                quality: 0.7,
+                allowsEditing: true,
+                aspect: [4, 3],
+                base64: false, // No obtener base64 directamente, lo convertiremos después
+            });
+
+            // SDK newer uses result.assets
+            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
+            if (uri) {
+                // Convertir a base64
+                const base64 = await uriToBase64(uri);
+                if (base64) {
+                    // Establecer la foto firma
+                    setFotoFirma({
+                        uri: uri,
+                        base64: base64
+                    });
+                    ToastAndroid.show('Foto de firma agregada', ToastAndroid.SHORT);
+                } else {
+                    Alert.alert('Error', 'No se pudo procesar la imagen');
+                }
+            }
+        } catch (err) {
+            console.error('Error opening camera', err);
+            Alert.alert('Error', 'No se pudo abrir la cámara.');
+        }
+    };
+
+    // Función para abrir la galería
+    const openGallery = async () => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la galería.');
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,  // ✅ Correcto
+                quality: 0.7,
+                allowsEditing: true,
+                aspect: [4, 3],
+                base64: false,
+            });
+
+            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
+            if (uri) {
+                // Convertir a base64
+                const base64 = await uriToBase64(uri);
+                if (base64) {
+                    // Establecer la foto firma
+                    setFotoFirma({
+                        uri: uri,
+                        base64: base64
+                    });
+                    ToastAndroid.show('Foto de firma agregada', ToastAndroid.SHORT);
+                } else {
+                    Alert.alert('Error', 'No se pudo procesar la imagen');
+                }
+            }
+        } catch (err) {
+            console.error('Error opening gallery', err);
+            Alert.alert('Error', 'No se pudo abrir la galería.');
+        }
+    };
+
+    // Función para eliminar la foto firma
+    const removeFotoFirma = () => {
+        setFotoFirma(null);
+        ToastAndroid.show('Foto de firma eliminada', ToastAndroid.SHORT);
     };
 
     const handleContrasennaChange = (text) => {
@@ -149,6 +352,11 @@ export default function UsuarioModalScreen() {
             // Añadir contraseña si se proporciona
             if (contrasenna.trim()) {
                 body.contrasenna = contrasenna;
+            }
+
+            // Añadir foto firma si se proporciona
+            if (fotoFirma && fotoFirma.base64) {
+                body.imagen = fotoFirma.base64;
             }
 
             // Incluir 'activo' solo en modo editar (endpoint UpdateUsuario recibe este campo)
@@ -422,6 +630,48 @@ export default function UsuarioModalScreen() {
                                     </View>
                                 </View>
                             )}
+
+                            {/* Foto Firma */}
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.label}>Foto Firma</Text>
+                                {fotoFirma ? (
+                                    <View style={styles.fotoFirmaContainer}>
+                                        {fotoFirma.uri ? (
+                                            <Image
+                                                source={{ uri: fotoFirma.uri }}
+                                                style={styles.fotoFirmaImage}
+                                                onError={() => console.warn('Error al cargar imagen:', fotoFirma.uri)}
+                                            />
+                                        ) : (
+                                            <View style={styles.loadingContainer}>
+                                                <Text>Cargando imagen...</Text>
+                                            </View>
+                                        )}
+                                        {isEditable && (
+                                            <TouchableOpacity onPress={removeFotoFirma} style={styles.removeFotoButton}>
+                                                <Text style={styles.removeFotoText}>X</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                ) : (
+                                    <View style={styles.fotoFirmaButtons}>
+                                        <TouchableOpacity onPress={openCamera} style={[styles.eyeButton, styles.photoAddButton]}>
+                                            <Image
+                                                source={require('../assets/images/camera.png')}
+                                                style={styles.photoIcon}
+                                                resizeMode="contain"
+                                            />
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={openGallery} style={[styles.eyeButton, styles.photoAddButton]}>
+                                            <Image
+                                                source={require('../assets/images/galeria-de-imagenes.png')}
+                                                style={styles.photoIcon}
+                                                resizeMode="contain"
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                            </View>
                         </View>
 
                         {/* Botón de Guardar (solo en editar/crear) */}
@@ -642,5 +892,59 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: Typography.body,
         fontWeight: '600',
+    },
+    fotoFirmaContainer: {
+        position: 'relative',
+        alignItems: 'center',
+    },
+    fotoFirmaImage: {
+        width: 150,
+        height: 150,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#000',
+    },
+    removeFotoButton: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1001,
+        borderWidth: 1,
+        borderColor: '#900',
+    },
+    removeFotoText: {
+        color: '#900',
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    fotoFirmaButtons: {
+        flexDirection: 'row',
+        gap: Spacing.s,
+    },
+    eyeButton: {
+        padding: Spacing.s,
+        borderRadius: 8,
+        backgroundColor: Colors.primary,
+        borderWidth: 1,
+        borderColor: '#000',
+    },
+    photoAddButton: {
+        width: 44,
+        height: 44,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
+    },
+    photoIcon: {
+        width: 24,
+        height: 24,
+        tintColor: Colors.textPrimary,
     },
 });
