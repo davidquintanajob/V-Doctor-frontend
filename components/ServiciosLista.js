@@ -11,11 +11,11 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         let totalCobrar = 0;
         let totalProfit = 0;
         itemsArr.forEach(item => {
-            if (item.selected) {
+            if (item && item.selected) {
                 const price = parseFloat(item.precio_cup || '0') || 0;
                 const qty = parseFloat(item.cantidad || '0') || 0;
-                // Los servicios no tienen costo de producto
-                const producto_precio = parseFloat(item.selected.comerciable.precio_cup || "0");
+                // Los servicios no tienen costo de producto; proteger con optional chaining
+                const producto_precio = parseFloat(item.selected?.comerciable?.precio_cup || "0");
                 totalCobrar += price * qty;
                 totalProfit += (price * qty) - (producto_precio * qty);
             }
@@ -142,8 +142,8 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                                     Plus por esta venta: {(() => {
                                         const price = parseFloat(entry.precio_cup || '0');
                                         const qty = parseFloat(entry.cantidad || '0');
-                                        // Los servicios no tienen costo de producto
-                                        const producto_precio = parseFloat(entry.selected.comerciable.precio_cup || "0");
+                                        // Los servicios no tienen costo de producto; proteger con optional chaining
+                                        const producto_precio = parseFloat(entry.selected?.comerciable?.precio_cup || "0");
                                         const profit = (price * qty) - (producto_precio * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}
