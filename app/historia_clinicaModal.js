@@ -27,6 +27,7 @@ import Modal from 'react-native/Libraries/Modal/Modal';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImagePicker from 'expo-image-picker';
+import AutocompleteTextInput from '../components/AutocompleteTextInput';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -1699,7 +1700,6 @@ export default function HistoriaClinicaModalScreen() {
     // Actualizar consulta (mismo flujo de validación)
     const handleUpdate = async () => {
         // Reuse same flow for now
-        await handleCreate();
     };
 
     const handleDelete = async () => {
@@ -1990,7 +1990,7 @@ export default function HistoriaClinicaModalScreen() {
                             {consultaData.anamnesis || '-'}
                         </Text>
                     ) : (
-                        <TextInput
+                        <AutocompleteTextInput
                             style={[styles.input, styles.largeInput]}
                             placeholder="Describe síntomas, historial y contexto clínico..."
                             value={consultaData.anamnesis}
@@ -2240,7 +2240,7 @@ export default function HistoriaClinicaModalScreen() {
                             {consultaData.diagnostico || '-'}
                         </Text>
                     ) : (
-                        <TextInput
+                        <AutocompleteTextInput
                             style={[styles.input, styles.largeInput]}
                             placeholder="Describe el diagnóstico..."
                             value={consultaData.diagnostico}
@@ -2266,7 +2266,7 @@ export default function HistoriaClinicaModalScreen() {
                             {consultaData.tratamiento || '-'}
                         </Text>
                     ) : (
-                        <TextInput
+                        <AutocompleteTextInput
                             style={[styles.input, styles.largeInput]}
                             placeholder="Describe el tratamiento prescrito..."
                             value={consultaData.tratamiento}
@@ -2292,7 +2292,7 @@ export default function HistoriaClinicaModalScreen() {
                             {consultaData.patologia || '-'}
                         </Text>
                     ) : (
-                        <TextInput
+                        <AutocompleteTextInput
                             style={[styles.input, styles.largeInput]}
                             placeholder="Describe la patología identificada..."
                             value={consultaData.patologia}
