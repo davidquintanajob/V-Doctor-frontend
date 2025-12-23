@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, StyleSheet, ActivityIndicator, Alert, ToastAndroid, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PatientSidebarMenu from '../components/PatientSidebarMenu';
@@ -15,6 +15,7 @@ export default function VacunasScreen() {
     };
 
     const pacienteParam = params.paciente ? JSON.parse(params.paciente) : null;
+    const pacienteId = pacienteParam?.id_paciente ?? pacienteParam?.id ?? null;
 
     const [showInfo, setShowInfo] = useState(false);
     const [showPatientMenu, setShowPatientMenu] = useState(false);
@@ -34,6 +35,7 @@ export default function VacunasScreen() {
     const [apiHost, setApiHost] = useState('');
     const [vacunasList, setVacunasList] = useState([]);
     const [loadingVacunas, setLoadingVacunas] = useState(false);
+    const [consultaLoading, setConsultaLoading] = useState(false);
 
     useEffect(() => {
         if (pacienteParam && pacienteParam.fecha_nacimiento) {
@@ -50,44 +52,65 @@ export default function VacunasScreen() {
         }
     }, [pacienteParam]);
 
-    // Cargar vacunas desde la API al montar la pantalla
-    useEffect(() => {
-        (async () => {
-            if (!pacienteParam || !pacienteParam.id_paciente && !pacienteParam.id) return;
-            const id = pacienteParam.id_paciente ?? pacienteParam.id;
-            try {
-                setLoadingVacunas(true);
-                const raw = await AsyncStorage.getItem('@config');
-                const cfg = raw ? JSON.parse(raw) : {};
+    // función reutilizable para cargar vacunas (ventas filtradas)
+    const fetchVacunas = async () => {
+        if (!pacienteId) return;
+        setLoadingVacunas(true);
+        try {
+            const raw = await AsyncStorage.getItem('@config');
+            const cfg = raw ? JSON.parse(raw) : {};
             const host = cfg.api_host || cfg.apihost || cfg.apiHost || '';
             setApiHost(host || '');
             const token = cfg.token || null;
-            const url = `${host.replace(/\/+$/, '')}/venta/medicamentoPaciente/${id}/vacuna`;
 
-                const res = await fetch(url, {
-                    method: 'GET',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        ...(token ? { Authorization: `Bearer ${token}` } : {})
-                    }
-                });
+            let baseHost = host || '';
+            while (baseHost.endsWith('/')) baseHost = baseHost.slice(0, -1);
+            const url = `${baseHost}/venta/Filter/500/1`;
 
-                if (res.ok) {
-                    const data = await res.json();
-                    setVacunasList(Array.isArray(data) ? data : (data?.rows || []));
-                } else {
-                    console.warn('Error cargando vacunas:', res.status);
-                    setVacunasList([]);
-                }
-            } catch (e) {
-                console.error('Error fetching vacunas:', e);
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    ...(token ? { Authorization: `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ tipo_comerciable: 'medicamento' })
+            });
+
+            if (!res.ok) {
+                console.warn('Error cargando ventas/vacunas:', res.status);
                 setVacunasList([]);
-            } finally {
-                setLoadingVacunas(false);
+                return;
             }
-        })();
-    }, [pacienteParam]);
+
+            const json = await res.json();
+            // la respuesta puede tener "data" o ser un array
+            const items = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : (json?.rows || []));
+
+            // filtrar solo productos cuyo medicamento.tipo_medicamento === 'vacuna' y que pertenezcan al paciente
+            const filtered = items.filter(it => {
+                try {
+                    const isVacuna = it?.comerciable?.producto?.medicamento?.tipo_medicamento === 'vacuna';
+                    const ventaPacienteId = it?.consulta?.paciente?.id_paciente ?? it?.consultum?.paciente?.id_paciente ?? it?.paciente?.id_paciente ?? null;
+                    return isVacuna && ventaPacienteId != null && String(ventaPacienteId) === String(pacienteId);
+                } catch (e) {
+                    return false;
+                }
+            }).map(it => ({ ...it, id: it.id_venta ?? it.id }));
+
+            setVacunasList(filtered);
+
+        } catch (e) {
+            console.error('Error fetching ventas/vacunas:', e);
+            setVacunasList([]);
+        } finally {
+            setLoadingVacunas(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchVacunas();
+    }, [pacienteId]);
 
     const calculateAgeFromDate = (birthDate) => {
         const now = new Date();
@@ -156,9 +179,127 @@ export default function VacunasScreen() {
 
     const handleOpenPatientMenu = () => setShowPatientMenu(true);
 
+    // Confirma y elimina una venta por id_venta
+    const handleDeleteVenta = (venta) => {
+        if (!venta) return;
+        const id_venta = venta.id_venta ?? venta.id;
+        Alert.alert('Confirmar eliminación', `¿Eliminar venta ${venta?.comerciable?.producto?.nombre || id_venta}?`, [
+            { text: 'Cancelar', style: 'cancel' },
+            { text: 'Eliminar', style: 'destructive', onPress: () => performDeleteVenta(id_venta) }
+        ]);
+    };
+
+    const performDeleteVenta = async (id_venta) => {
+        if (!id_venta) return;
+        try {
+            const raw = await AsyncStorage.getItem('@config');
+            const cfg = raw ? JSON.parse(raw) : {};
+            const host = cfg.api_host || cfg.apihost || cfg.apiHost || '';
+            const token = cfg.token || null;
+
+            let baseHost = host || '';
+            while (baseHost.endsWith('/')) baseHost = baseHost.slice(0, -1);
+            const url = `${baseHost}/venta/delete/${id_venta}`;
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers.Authorization = `Bearer ${token}`;
+
+            const res = await fetch(url, { method: 'DELETE', headers });
+            let responseData = null;
+            try { responseData = await res.json(); } catch (e) { /* ignore parse errors */ }
+
+            if (!res.ok) {
+                let errorMessage = 'Error desconocido';
+                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                    errorMessage = responseData.errors.join('\n• ');
+                } else if (responseData && typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                } else if (responseData && (responseData.message || responseData.description)) {
+                    errorMessage = responseData.message || responseData.description;
+                } else if (responseData) {
+                    errorMessage = JSON.stringify(responseData);
+                }
+                Alert.alert(`Error ${res.status}`, errorMessage);
+                return;
+            }
+
+            // éxito
+            try { ToastAndroid.show('Venta eliminada', ToastAndroid.SHORT); } catch (e) { /* ignore on non-Android */ }
+            // refrescar lista
+            await fetchVacunas();
+
+        } catch (err) {
+            console.error('Error eliminando venta:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+        }
+    };
+
+    // Extrae id_consulta de una venta y abre la consulta (modo 'ver' o 'editar')
+    const handleOpenConsultaFromVenta = (venta, mode = 'ver') => {
+        if (!venta) return;
+        // posibles ubicaciones del id_consulta
+        const consultaId = venta?.consultum?.id_consulta ?? venta?.consultum?.id ?? venta?.consulta?.id_consulta ?? venta?.consulta?.id ?? venta?.id_consulta ?? null;
+        if (!consultaId) {
+            Alert.alert('No disponible', 'Esta venta no tiene una consulta asociada');
+            return;
+        }
+        fetchConsultaAndOpen(consultaId, mode);
+    };
+
+    const fetchConsultaAndOpen = async (consultaId, mode = 'ver') => {
+        if (!consultaId) return;
+        setConsultaLoading(true);
+        try {
+            const raw = await AsyncStorage.getItem('@config');
+            const cfg = raw ? JSON.parse(raw) : {};
+            const host = cfg.api_host || cfg.apihost || cfg.apiHost || '';
+            const token = cfg.token || null;
+
+            let baseHost = host || '';
+            while (baseHost.endsWith('/')) baseHost = baseHost.slice(0, -1);
+            const url = `${baseHost}/consulta/${consultaId}`;
+
+            const res = await fetch(url, { method: 'GET', headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+            let responseData = null;
+            try { responseData = await res.json(); } catch (e) { /* ignore parse errors */ }
+
+            if (!res.ok) {
+                let errorMessage = 'Error desconocido';
+                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                    errorMessage = responseData.errors.join('\n• ');
+                } else if (responseData && typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                } else if (responseData && (responseData.message || responseData.description)) {
+                    errorMessage = responseData.message || responseData.description;
+                } else if (responseData) {
+                    errorMessage = JSON.stringify(responseData);
+                }
+                Alert.alert(`Error ${res.status}`, errorMessage);
+                setConsultaLoading(false);
+                return;
+            }
+
+            // Abrir modal pasando la consulta completa
+            setConsultaLoading(false);
+            router.push({ pathname: '/historia_clinicaModal', params: { mode: mode, consulta: JSON.stringify(responseData) } });
+        } catch (err) {
+            console.error('Error obteniendo consulta:', err);
+            setConsultaLoading(false);
+            Alert.alert('Error', err.message || 'Error desconocido');
+        }
+    };
+
     return (
         <View style={styles.container}>
             <TopBar onMenuNavigate={handleMenuNavigate} />
+            <Modal transparent animationType="fade" visible={consultaLoading}>
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.modalText}>Cargando consulta...</Text>
+                    </View>
+                </View>
+            </Modal>
             <ScrollView contentContainerStyle={styles.scrollContentContainer}>
                 {/* Header con back, toggle sidebar, título e info */}
                 <View style={[styles.headerRow, { justifyContent: 'space-between' }]}>
@@ -197,9 +338,56 @@ export default function VacunasScreen() {
                     <Text style={styles.saveButtonText}>+ Agregar Vacuna</Text>
                 </TouchableOpacity>
 
-                {/* Contenedor blanco vacío */}
+                {/* Lista de vacunas (ventas filtradas) */}
                 <View style={[styles.section, { minHeight: 200, marginTop: Spacing.m }]}>
-                    {/* Espacio reservado para la lista / formulario de vacunas */}
+                    <View style={{ marginBottom: Spacing.m }}>
+                        {loadingVacunas && (
+                            <View style={{ padding: Spacing.m, alignItems: 'center', justifyContent: 'center' }}>
+                                <ActivityIndicator size="large" color={Colors.primary} />
+                            </View>
+                        )}
+
+                        {!loadingVacunas && vacunasList.length === 0 && (
+                            <View style={{ padding: Spacing.m }}><Text>No hay vacunas disponibles</Text></View>
+                        )}
+
+                        {!loadingVacunas && vacunasList.map((c, idx) => {
+                            if (!c) return null;
+
+                            // nombre del producto si está disponible
+                            const productoNombre = c?.comerciable?.producto?.nombre || c?.comerciable?.servicio?.descripcion || ('Venta ' + (c.id_venta ?? c.id ?? idx));
+
+                            // imagen por defecto (no usado pero mantenemos la estructura)
+                            let imgSource = require('../assets/images/especies/huella.png');
+                            if (c?.cliente?.foto_ruta && apiHost) {
+                                const cleaned = String(c.cliente.foto_ruta).replace(/\\/g, '/').replace(/^\/+/, '');
+                                const final = apiHost.replace(/\/+$/, '') + '/' + cleaned;
+                                imgSource = { uri: final };
+                            }
+
+                                return (
+                                <TouchableOpacity key={c.id ?? c.id_venta ?? idx} style={styles.pacienteItem} activeOpacity={0.8} onPress={() => handleOpenConsultaFromVenta(c, 'ver')}>
+                                    <View style={styles.pacienteInfo}>
+                                        <Text style={styles.pacienteName}>{productoNombre}</Text>
+                                        <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Fecha:</Text> {formatDateForDisplay(c.fecha)}</Text>
+                                        <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Precio cobrado:</Text> $ {c.precio_cobrado_cup ?? '-'}</Text>
+                                    </View>
+
+                                    <View style={{ flexDirection: 'column', padding: Spacing.s }}>
+                                                <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_azul, marginBottom: Spacing.s }]} onPress={() => handleOpenConsultaFromVenta(c, 'editar')}>
+                                            <Image source={require('../assets/images/editar.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
+                                        </TouchableOpacity>
+
+                                                <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_rojo_opciones }]} onPress={() => handleDeleteVenta(c)}>
+                                                    <Image source={require('../assets/images/basura.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
+                                                </TouchableOpacity>
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+
+                        {/* sin paginación: se listan todos los resultados y se hace scroll */}
+                    </View>
                 </View>
             </ScrollView>
 
@@ -260,4 +448,22 @@ const styles = StyleSheet.create({
     pacienteText: { fontSize: Typography.small, color: Colors.textSecondary, marginBottom: 4, marginRight: 12 },
     pacienteAgeBold: { fontWeight: '700' },
     menuButton: { padding: Spacing.s, borderRadius: 8, backgroundColor: Colors.primarySuave, marginLeft: Spacing.s, borderWidth: 1, borderColor: '#000' },
+    pacienteItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#000', borderRadius: 8, marginBottom: Spacing.s, overflow: 'hidden', position: 'relative', minHeight: 110 },
+    pacienteImage: { width: 70, height: 70, borderRadius: 110 / 2, marginLeft: 8, marginRight: 8, borderWidth: 1, borderColor: '#ddd' },
+    pacienteInfo: { flex: 1, padding: Spacing.s },
+    pacienteName: { fontSize: Typography.body, fontWeight: '700', color: Colors.textSecondary, marginBottom: 4 },
+    pacienteText: { fontSize: Typography.small, color: Colors.textSecondary, marginBottom: 2 },
+    actionButton: { alignItems: 'center', justifyContent: 'center', padding: Spacing.s, borderRadius: 8, backgroundColor: Colors.primary },
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: '#fff', padding: Spacing.m, borderRadius: 8, alignItems: 'center', minWidth: 200 },
+    modalText: { marginTop: Spacing.s, color: Colors.textSecondary },
+    paginationContainer: { paddingHorizontal: Spacing.m, paddingVertical: Spacing.m, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0', marginTop: Spacing.s },
+    paginationControls: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Spacing.s, marginBottom: Spacing.s },
+    paginationInfoContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    paginationButton: { paddingVertical: Spacing.s, paddingHorizontal: Spacing.m, borderRadius: 4, borderWidth: 1, borderColor: Colors.primary, backgroundColor: Colors.primary, minWidth: 100, alignItems: 'center' },
+    paginationButtonDisabled: { backgroundColor: Colors.primarySuave, borderColor: Colors.primarySuave },
+    paginationButtonText: { fontSize: Typography.small, color: Colors.textPrimary, fontWeight: '500' },
+    paginationButtonTextDisabled: { color: Colors.textSecondary },
+    paginationInfo: { fontSize: Typography.small, color: Colors.textSecondary, fontWeight: '500' },
+    paginationPageInfo: { fontSize: Typography.small, color: Colors.textSecondary, fontWeight: '500' },
 });
