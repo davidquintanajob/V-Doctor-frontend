@@ -11,7 +11,8 @@ import {
   Image,
   Alert,
   ToastAndroid,
-  Dimensions
+  Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -512,8 +513,8 @@ export default function PacientesScreen() {
 
         <View style={styles.pacientesListContainer}>
           {isLoading && (
-            <View style={{ padding: Spacing.m }}>
-              <Text>Cargando pacientes...</Text>
+            <View style={{ padding: Spacing.m, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="large" color={Colors.primary} />
             </View>
           )}
 
