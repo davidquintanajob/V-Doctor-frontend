@@ -46,6 +46,9 @@ export default function ProductoModalScreen() {
         precio_cup: productoParam?.comerciable?.precio_cup ? String(productoParam.comerciable.precio_cup) : ''
     });
 
+    // Indica si el usuario modificó manualmente el campo código
+    const [codigoModified, setCodigoModified] = useState(false);
+
     const allRoles = ['Administrador', 'Médico', 'Técnico', 'Estilista'];
     const [rolesSelected, setRolesSelected] = useState([]);
     const [showScannerModal, setShowScannerModal] = useState(false);
@@ -109,6 +112,8 @@ export default function ProductoModalScreen() {
                 precio_usd: productoParam?.comerciable?.precio_usd ? String(productoParam.comerciable.precio_usd) : '',
                 precio_cup: productoParam?.comerciable?.precio_cup ? String(productoParam.comerciable.precio_cup) : ''
             });
+            // Reiniciar marca de modificación de código cuando se carga el parámetro
+            try { setCodigoModified(false); } catch (e) { /* ignore */ }
             // parse roles_autorizados if present
             try {
                 const rolesStr = productoParam?.comerciable?.roles_autorizados || productoParam?.roles_autorizados || '';
@@ -243,7 +248,6 @@ export default function ProductoModalScreen() {
 
             const body = {
                 nombre: productoData.nombre,
-                codigo: productoData.codigo ? Number(productoData.codigo) : null,
                 costo_usd: productoData.costo_usd ? Number(productoData.costo_usd) : 0,
                 costo_cup: productoData.costo_cup ? Number(productoData.costo_cup) : 0,
                 categoria: productoData.categoria,
@@ -252,6 +256,12 @@ export default function ProductoModalScreen() {
                 precio_cup: productoData.precio_cup ? Number(productoData.precio_cup) : 0,
                 roles_autorizados: rolesSelected.join(', ')
             };
+
+            // In 'editar' mode only include 'codigo' if the user modified it manually
+            if (!(mode === 'editar' && !codigoModified)) {
+                // include codigo (can be null if empty)
+                body.codigo = productoData.codigo ? Number(productoData.codigo) : null;
+            }
 
             const base = host.replace(/\/+$/, '');
             let url;
@@ -379,7 +389,17 @@ export default function ProductoModalScreen() {
                             <View style={styles.column}>
                                 <Text style={styles.label}>Código *</Text>
                                 <View style={styles.codigoInputRow}>
-                                    <TextInput style={[styles.input, styles.codigoInput, !isEditable && styles.disabledInput]} value={productoData.codigo} onChangeText={(t) => setProductoData(prev => ({ ...prev, codigo: t.replace(/[^0-9]/g, '') }))} keyboardType="numeric" editable={isEditable} placeholder="Código" />
+                                    <TextInput
+                                        style={[styles.input, styles.codigoInput, !isEditable && styles.disabledInput]}
+                                        value={productoData.codigo}
+                                        onChangeText={(t) => {
+                                            if (!codigoModified) setCodigoModified(true);
+                                            setProductoData(prev => ({ ...prev, codigo: t.replace(/[^0-9]/g, '') }));
+                                        }}
+                                        keyboardType="numeric"
+                                        editable={isEditable}
+                                        placeholder="Código"
+                                    />
                                     <TouchableOpacity style={styles.cameraButton} onPress={() => setShowScannerModal(true)}>
                                         <Image source={require('../assets/images/camera.png')} style={styles.cameraIcon} />
                                     </TouchableOpacity>

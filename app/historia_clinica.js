@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, StyleSheet, Alert, ToastAndroid } from 'react-native';
+import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, StyleSheet, Alert, ToastAndroid, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PatientSidebarMenu from '../components/PatientSidebarMenu';
+import ConsultaModeloImprecion from '../components/ConsultaModeloImprecion';
 import TopBar from '../components/TopBar';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -32,6 +33,8 @@ export default function HistoriaClinicaScreen() {
     const [historiaClinicaList, setHistoriaClinicaList] = useState([]);
     const [loadingHistoriaClinica, setLoadingHistoriaClinica] = useState(false);
     const [showMoreOptions, setShowMoreOptions] = useState(false);
+    const [printModalOpen, setPrintModalOpen] = useState(false);
+    const [consultaToPrint, setConsultaToPrint] = useState(null);
     const [motivoSearch, setMotivoSearch] = useState('');
     const [filters, setFilters] = useState({
         diagnostico: '',
@@ -348,14 +351,17 @@ export default function HistoriaClinicaScreen() {
                     <View style={{ marginBottom: Spacing.m }}>
                         {/* Lista de consultas */}
                         {loadingHistoriaClinica && (
-                            <View style={{ padding: Spacing.m }}><Text>Cargando consultas...</Text></View>
+                            <View style={{ padding: Spacing.m, alignItems: 'center', justifyContent: 'center' }}>
+                                <ActivityIndicator size="large" color={Colors.primary} />
+                            </View>
                         )}
 
                         {!loadingHistoriaClinica && historiaClinicaList.length === 0 && (
                             <View style={{ padding: Spacing.m }}><Text>No hay consultas disponibles</Text></View>
                         )}
 
-                        {historiaClinicaList.map((c, idx) => {
+                        {!loadingHistoriaClinica && historiaClinicaList.map((c, idx) => {
+                            if (!c) return null;
                             const paciente = c.paciente || {};
                             // imagen paciente si está disponible
                             let imgSource = require('../assets/images/especies/huella.png');
@@ -369,7 +375,7 @@ export default function HistoriaClinicaScreen() {
                                 <TouchableOpacity key={c.id ?? idx} style={styles.pacienteItem} activeOpacity={0.8} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'ver', consulta: JSON.stringify(c) } })}>
                                     <View style={styles.pacienteInfo}>
                                         <Text style={styles.pacienteName}>{c.motivo}</Text>
-                                        <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Usuario:</Text> {formatDateForDisplay(c.usuario.nombre_natural)}</Text>
+                                        <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Usuario:</Text> {formatDateForDisplay(c.usuario?.nombre_natural)}</Text>
                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Fecha:</Text> {formatDateForDisplay(c.fecha)}</Text>
                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Diagnóstico:</Text> {c.diagnostico || '-'}</Text>
                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Tratamiento:</Text> {c.tratamiento || '-'}</Text>
@@ -378,6 +384,10 @@ export default function HistoriaClinicaScreen() {
                                     <View style={{ flexDirection: 'column', padding: Spacing.s }}>
                                         <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_azul, marginBottom: Spacing.s }]} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'editar', consulta: JSON.stringify(c) } })}>
                                             <Image source={require('../assets/images/editar.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.primarySuave, marginBottom: Spacing.s }]} onPress={() => { setConsultaToPrint(c); setPrintModalOpen(true); }}>
+                                            <Image source={require('../assets/images/impresora.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
                                         </TouchableOpacity>
 
                                         <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_rojo_opciones }]} onPress={() => Alert.alert('Confirmar eliminación', `¿Eliminar consulta ${c.motivo || c.id}?`, [{ text: 'Cancelar', style: 'cancel' }, { text: 'Eliminar', style: 'destructive', onPress: () => handleDeleteConsulta(c.id_consulta || c.id) }])}>
@@ -410,6 +420,8 @@ export default function HistoriaClinicaScreen() {
                 apiHost={apiHost}
                 selectedItem={'historia_clinica'}
             />
+
+            <ConsultaModeloImprecion isOpen={printModalOpen} onClose={() => { setPrintModalOpen(false); setConsultaToPrint(null); }} consulta={consultaToPrint} paciente={pacienteData} />
         </View>
     );
 

@@ -251,10 +251,14 @@ export default function HistoriaClinicaModalScreen() {
                     // Es un servicio
                     serviciosItems.push({
                         id: id,
+                        id_venta: venta.id_venta,
+                        fecha: venta.fecha,
                         selected: comerciable.servicio,
                         precio_cup: venta.precio_cobrado_cup?.toString() || '',
                         cantidad: venta.cantidad?.toString() || '1',
-                        precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined)
+                        costo_producto_cup: venta.costo_producto_cup,
+                        precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
+                        precio_original_comerciable_usd: (venta.precio_original_comerciable_usd != null) ? String(venta.precio_original_comerciable_usd) : (venta.costo_producto_usd != null ? String(venta.costo_producto_usd) : undefined)
                     });
                 } else if (comerciable.producto) {
                     // Es un producto o medicamento
@@ -262,6 +266,8 @@ export default function HistoriaClinicaModalScreen() {
                         // Es un medicamento (antibiótico, vacuna, antiparasitario)
                         const itemData = {
                             id: id,
+                            id_venta: venta.id_venta,
+                            fecha: venta.fecha,
                             selected: {
                                 producto: producto,
                                 unidad_medida: medicamento.unidad_medida || '',
@@ -272,7 +278,9 @@ export default function HistoriaClinicaModalScreen() {
                             posologia: medicamento.posologia || '',
                             precio_cup: venta.precio_cobrado_cup?.toString() || '',
                             cantidad: venta.cantidad?.toString() || '1',
-                            precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined)
+                            costo_producto_cup: venta.costo_producto_cup,
+                            precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
+                            precio_original_comerciable_usd: (venta.precio_original_comerciable_usd != null) ? String(venta.precio_original_comerciable_usd) : (venta.costo_producto_usd != null ? String(venta.costo_producto_usd) : undefined)
                         };
 
                         switch (medicamento.tipo_medicamento) {
@@ -287,23 +295,27 @@ export default function HistoriaClinicaModalScreen() {
                                 break;
                         }
                     } else {
-                            // Es un producto normal (no medicamento)
-                            // Mapear los datos de la venta a la estructura que espera la lista
-                            productosItems.push({
-                                id: (venta.id_venta != null) ? String(venta.id_venta) : `${Date.now()}_${index}`,
-                                selected: producto,
-                                codigo: producto.codigo?.toString() || '',
-                                // precio de la venta (lo cobrado)
-                                precio_cup: venta.precio_cobrado_cup?.toString() || '',
-                                // cantidad vendida
-                                cantidad: venta.cantidad?.toString() || '1',
-                                // precio original del comerciable (necesario para calcular el plus)
-                                precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined)
-                            });
-                        }
+                        // Es un producto normal (no medicamento)
+                        // Mapear los datos de la venta a la estructura que espera la lista
+                        productosItems.push({
+                            id: (venta.id_venta != null) ? String(venta.id_venta) : `${Date.now()}_${index}`,
+                            id_venta: venta.id_venta,
+                            fecha: venta.fecha,
+                            selected: producto,
+                            codigo: producto.codigo?.toString() || '',
+                            // precio de la venta (lo cobrado)
+                            precio_cup: venta.precio_cobrado_cup?.toString() || '',
+                            // cantidad vendida
+                            cantidad: venta.cantidad?.toString() || '1',
+                            costo_producto_cup: venta.costo_producto_cup,
+                            // precio original del comerciable (necesario para calcular el plus)
+                            precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
+                            precio_original_comerciable_usd: (venta.precio_original_comerciable_usd != null) ? String(venta.precio_original_comerciable_usd) : (venta.costo_producto_usd != null ? String(venta.costo_producto_usd) : undefined)
+                        });
+                    }
                 }
             });
-            
+
             // Actualizar los estados iniciales
             setInitialMedicamentos(medicamentosItems);
             setInitialVacunas(vacunasItems);
@@ -422,7 +434,7 @@ export default function HistoriaClinicaModalScreen() {
             if (recordingTimerPatologia) clearInterval(recordingTimerPatologia);
         };
     }, [recordingTimerAnamnesis, recordingTimerDiagnostico, recordingTimerTratamiento, recordingTimerPatologia]);
-    
+
     // Función para convertir URI a base64
     const uriToBase64 = async (uri) => {
         if (!uri) return '';
@@ -1697,53 +1709,154 @@ export default function HistoriaClinicaModalScreen() {
         }
     };
 
-    // Actualizar consulta (mismo flujo de validación)
+    // Actualizar consulta (similar a create pero sin validaciones de ventas)
     const handleUpdate = async () => {
-        // Reuse same flow for now
-    };
+        setLoading(true);
+        try {
+            const raw = await AsyncStorage.getItem('@config');
+            if (!raw) {
+                Alert.alert('Error', 'No hay configuración de API');
+                return;
+            }
+            const cfg = JSON.parse(raw);
+            const host = cfg.api_host || cfg.apihost || cfg.apiHost || '';
+            const token = cfg.token || null;
 
-    const handleDelete = async () => {
-        if (!consultaData.id_consulta) return;
+            if (!host) {
+                Alert.alert('Error', 'No hay host configurado');
+                return;
+            }
 
-        Alert.alert('Confirmar eliminación', '¿Eliminar esta consulta?', [
-            { text: 'Cancelar', style: 'cancel' },
-            {
-                text: 'Eliminar',
-                style: 'destructive',
-                onPress: async () => {
-                    setLoading(true);
-                    try {
-                        const raw = await AsyncStorage.getItem('@config');
-                        if (!raw) {
-                            Alert.alert('Error', 'No hay configuración de API');
-                            return;
-                        }
-                        const cfg = JSON.parse(raw);
-                        const host = cfg.api_host || cfg.apihost || cfg.apiHost || '';
-                        const token = cfg.token || null;
+            // Obtener ids de usuarios seleccionados (si aplica)
+            let usuariosSeleccionados = [];
+            try {
+                if (usuariosListRef.current && typeof usuariosListRef.current.getItems === 'function') {
+                    usuariosSeleccionados = usuariosListRef.current.getItems() || [];
+                }
+            } catch (err) { usuariosSeleccionados = []; }
+            const usuariosIds = usuariosSeleccionados.map(u => u.id_usuario || u.id).filter(Boolean);
 
-                        const url = `${host}/api/consultas/${consultaData.id_consulta}`;
-                        const headers = {};
-                        if (token) headers['Authorization'] = `Bearer ${token}`;
+            // Preparar el array de fotos para el payload (base64)
+            const fotosPayload = fotos.map(foto => ({
+                imagen: foto.base64,
+                nota: foto.nota || ''
+            }));
 
-                        const response = await fetch(url, { method: 'DELETE', headers });
+            // Recolectar items de todas las listas (solo los seleccionados)
+            const medicamentosItems = (medicamentosListRef.current && typeof medicamentosListRef.current.getItems === 'function')
+                ? (medicamentosListRef.current.getItems() || [])
+                : [];
+            const vacunasItems = (vacunasListRef.current && typeof vacunasListRef.current.getItems === 'function')
+                ? (vacunasListRef.current.getItems() || [])
+                : [];
+            const antiparasitariosItems = (antiparasitariosListRef.current && typeof antiparasitariosListRef.current.getItems === 'function')
+                ? (antiparasitariosListRef.current.getItems() || [])
+                : [];
+            const serviciosItems = (serviciosListRef.current && typeof serviciosListRef.current.getItems === 'function')
+                ? (serviciosListRef.current.getItems() || [])
+                : [];
+            const productosItems = (productosListRef.current && typeof productosListRef.current.getItems === 'function')
+                ? (productosListRef.current.getItems() || [])
+                : [];
 
-                        if (!response.ok) {
-                            const error = await response.text();
-                            Alert.alert('Error', `Fallo al eliminar: ${error}`);
-                            return;
-                        }
+            // Construir array "ventas" a enviar en el body
+            const ventas = [];
 
-                        ToastAndroid.show('Consulta eliminada', ToastAndroid.SHORT);
-                        router.back();
-                    } catch (error) {
-                        Alert.alert('Error', error.message);
-                    } finally {
-                        setLoading(false);
-                    }
-                },
-            },
-        ]);
+            const buildVentaFromEntry = (entry, tipo) => {
+                const sel = entry.selected || {};
+                let producto = sel.producto || sel || {};
+                console.log("Venta de ", tipo, " : ", JSON.stringify(entry, null, 2));
+
+                return {
+                    fecha: entry.fecha || new Date(consultaData.fecha).toISOString(),
+                    id_venta: entry.id_venta || null,
+                    precio_original_comerciable_cup: parseFloat(entry.precio_original_comerciable_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(entry.precio_original_comerciable_usd || 0) || 0,
+                    costo_producto_cup: entry.costo_producto_cup,
+                    cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
+                    id_comerciable: parseInt(entry.selected?.producto?.id_comerciable || entry.selected?.id_comerciable || 0, 10) || 0,
+                    id_usuario: usuariosIds || [],
+                };
+            };
+
+            medicamentosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'medicamentos')));
+            vacunasItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'vacunas')));
+            antiparasitariosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'antiparasitarios')));
+            serviciosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'servicios')));
+            productosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'productos')));
+
+            // Preparar payload completo para UpdateWithPhotosVentas
+            const payload = {
+                fecha: new Date(consultaData.fecha).toISOString(),
+                motivo: consultaData.motivo,
+                diagnostico: consultaData.diagnostico,
+                anamnesis: consultaData.anamnesis,
+                tratamiento: consultaData.tratamiento,
+                patologia: consultaData.patologia,
+                id_paciente: consultaData.id_paciente || pacienteParam?.id_paciente || pacienteParam?.id || null,
+                id_usuario: cfg.usuario?.id_usuario || cfg.usuario?.id || null,
+                ventas: ventas,
+            };
+
+            //fotos: fotosPayload,
+
+            // Mostrar modal de progreso mínimo
+            setValidationVisible(true);
+            setValidationProgress(96);
+            setValidationTitle('Preparando actualización...');
+
+            // Construir url
+            const urlUpdate = `${host.replace(/\/+$/, '')}/consulta/UpdateWithPhotosVentas/${consultaData.id_consulta || consultaParam?.id_consulta || consultaParam?.id}`;
+            
+            // Por ahora commented out la llamada a la API — sólo logs para pruebas
+            // Excluir las imágenes (base64) del log por privacidad/volumen
+            const payloadForLog = { ...payload };
+            if (Array.isArray(payloadForLog.fotos)) {
+                payloadForLog.fotos = payloadForLog.fotos.map(f => ({ nota: f.nota || '' }));
+            }
+
+            // Ejemplo de la llamada (dejada comentada según petición)
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(urlUpdate, { method: 'PUT', headers, body: JSON.stringify(payload) });
+            let responseData = null;
+            try { responseData = await res.json(); } catch (e) { responseData = null; }
+
+            if (!res.ok) {
+                let errorMessage = 'Error desconocido';
+                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                    errorMessage = responseData.errors.join('\n• ');
+                } else if (responseData && typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                } else if (responseData && (responseData.message || responseData.description)) {
+                    errorMessage = responseData.message || responseData.description;
+                } else if (responseData) {
+                    errorMessage = JSON.stringify(responseData);
+                }
+                Alert.alert(`Error ${res.status}`, errorMessage);
+                setValidationVisible(false);
+                return;
+            }
+
+            setValidationProgress(100);
+            setValidationTitle('Payload preparado — ver consola');
+
+            setTimeout(() => {
+                setValidationVisible(false);
+                ToastAndroid.show('Payload preparado — ver consola', ToastAndroid.LONG);
+                // No hacer router.back() automáticamente para que el usuario pruebe la consola
+            }, 800);
+
+        } catch (err) {
+            console.error('Error en handleUpdate:', err);
+            Alert.alert('Error', err.message || 'Error desconocido');
+            setValidationVisible(false);
+        } finally {
+            setLoading(false);
+        }
     };
 
     // Función para obtener el tiempo de grabación según el campo
@@ -2318,16 +2431,6 @@ export default function HistoriaClinicaModalScreen() {
                                 {mode === 'editar' ? 'Guardar Cambios' : 'Crear Consulta'}
                             </Text>
                         </TouchableOpacity>
-
-                        {mode === 'editar' && (
-                            <TouchableOpacity
-                                style={[styles.deleteButton, loading && styles.buttonDisabled]}
-                                onPress={handleDelete}
-                                disabled={loading}
-                            >
-                                <Text style={styles.deleteButtonText}>Eliminar</Text>
-                            </TouchableOpacity>
-                        )}
                     </View>
                 )}
             </ScrollView>
