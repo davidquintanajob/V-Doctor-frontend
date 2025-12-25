@@ -1769,8 +1769,8 @@ export default function HistoriaClinicaModalScreen() {
                 return {
                     fecha: entry.fecha || new Date(consultaData.fecha).toISOString(),
                     id_venta: entry.id_venta || null,
-                    precio_original_comerciable_cup: parseFloat(entry.precio_original_cup || 0) || 0,
-                    precio_original_comerciable_usd: parseFloat(entry.precio_original_usd || 0) || 0,
+                    precio_original_comerciable_cup: parseFloat(entry.precio_original_cup || entry.precio_original_comerciable_cup) || 0,
+                    precio_original_comerciable_usd: parseFloat(entry.precio_original_usd || entry.precio_original_comerciable_usd) || 0,
                     costo_producto_cup: entry.costo_producto_cup,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
