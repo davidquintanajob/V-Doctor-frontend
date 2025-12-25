@@ -12,6 +12,7 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
     const [storageUser, setStorageUser] = useState(null);
     const [logoUri, setLogoUri] = useState(null);
     const [customTotal, setCustomTotal] = useState(''); // Nuevo estado para el total editable
+    const [ventaNotas, setVentaNotas] = useState({}); // Estado para notas de ventas
 
     useEffect(() => {
         const c = consulta || {};
@@ -23,11 +24,19 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             usuario: (c.usuario && c.usuario.nombre_natural) || '',
             observaciones: c.observaciones || ''
         });
-        
+
         // Calcular y establecer el total inicial
         const ventas = Array.isArray(c.venta) ? c.venta : [];
         const calculatedTotal = ventas.reduce((s, it) => s + (Number(it.precio_cobrado_cup) || 0), 0);
         setCustomTotal(calculatedTotal.toString());
+
+        // Inicializar notas de ventas
+        const notasIniciales = {};
+        ventas.forEach((v, index) => {
+            const key = v.id_venta ?? index;
+            notasIniciales[key] = v.nota || ''; // Si ya existe nota en los datos, se inicializa
+        });
+        setVentaNotas(notasIniciales);
     }, [consulta, isOpen]);
 
     // load AsyncStorage config (api host and user) and resolve logo asset URI
@@ -104,9 +113,32 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
                 .sales-item:last-child { border-bottom: none; }
                 .item-name { flex: 2; }
                 .item-qty { flex: 1; text-align: center; }
+                .item-nota { flex: 1; text-align: center; font-size: 22px; color: #666; font-style: italic; }
                 .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; padding-top: 8px; border-top: 2px solid #333; font-size: 27px; }
                 .signature-section { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 13px; border-top: 1px solid #ccc; }
                 .firma { width: 126px; height: auto; filter: grayscale(100%); }
+                .sales-header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    padding: 6px 0; 
+    margin-bottom: 8px; 
+    border-bottom: 2px solid #333; 
+    font-weight: 700; 
+    font-size: 25px; 
+}
+.header-name { 
+    flex: 2; 
+    text-align: left; 
+}
+.header-qty { 
+    flex: 1; 
+    text-align: center; 
+}
+.header-nota { 
+    flex: 1; 
+    text-align: center; 
+}
             </style>
         </head>
         <body>
@@ -147,14 +179,24 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
 
                 <div class="hr"></div>
 
+                <div class="sales-header">
+    <div class="header-name">Nombre</div>
+    <div class="header-qty">Cantidad</div>
+    <div class="header-nota">Nota</div>
+</div>
                 <div class="sales-section">
-                    <div class="sales-header"></div>
-                    ${ventas.map(v => {
+                    ${ventas.map((v, index) => {
             const comp = v.comerciable || {};
             const prod = comp.producto;
             const serv = comp.servicio;
             const label = prod ? prod.nombre : (serv ? (serv.descripcion || serv.nombre) : 'Ítem');
-            return `<div class="sales-item"><div class="item-name">${escapeHtml(label)}</div><div class="item-qty">${escapeHtml(String(v.cantidad || '1'))}</div></div>`;
+            const key = v.id_venta ?? index;
+            const nota = ventaNotas[key] || '';
+            return `<div class="sales-item">
+                            <div class="item-name">${escapeHtml(label)}</div>
+                            <div class="item-qty">${escapeHtml(String(v.cantidad || '1'))}</div>
+                            <div class="item-nota">${escapeHtml(nota)}</div>
+                        </div>`;
         }).join('')}
                     
                     <div class="total-row">
@@ -269,11 +311,20 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
                                 const prod = comp.producto;
                                 const serv = comp.servicio;
                                 const label = prod ? prod.nombre : (serv ? (serv.descripcion || serv.nombre) : 'Ítem');
+                                const key = v.id_venta ?? i;
                                 return (
-                                    <View key={v.id_venta ?? i} style={styles.ventaRow}>
+                                    <View key={key} style={styles.ventaRow}>
                                         <Text style={styles.ventaName}>{label}</Text>
                                         <Text style={styles.ventaQty}>{String(v.cantidad || '')}</Text>
                                         <Text style={styles.ventaPrice}>{(v.precio_cobrado_cup != null) ? String(v.precio_cobrado_cup) + ' CUP' : '-'}</Text>
+                                        <TextInput
+                                            style={styles.ventaNotaInput}
+                                            value={ventaNotas[key] || ''}
+                                            onChangeText={(text) => {
+                                                setVentaNotas(prev => ({ ...prev, [key]: text }));
+                                            }}
+                                            placeholder="Nota"
+                                        />
                                     </View>
                                 );
                             }) : <Text style={styles.fieldValue}>Sin ventas</Text>}
@@ -314,26 +365,35 @@ const styles = StyleSheet.create({
     patientBox: { backgroundColor: '#fff', padding: Spacing.s, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', marginBottom: Spacing.m },
     patientText: { color: Colors.textSecondary, marginBottom: 4 },
     ventasBox: { marginTop: Spacing.m, backgroundColor: '#fff', padding: Spacing.s, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
-    ventaItemRow: { marginBottom: Spacing.xs },
-    ventaText: { color: Colors.textSecondary },
+    ventaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.xs, borderBottomWidth: 0, borderColor: '#eee' },
+    ventaName: { flex: 3, color: Colors.textSecondary },
+    ventaQty: { flex: 1, textAlign: 'center', color: Colors.textSecondary },
+    ventaPrice: { flex: 1, textAlign: 'right', color: Colors.textSecondary },
+    ventaNotaInput: {
+        flex: 2,
+        marginLeft: Spacing.s,
+        paddingHorizontal: Spacing.s,
+        paddingVertical: Spacing.xs,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#ddd',
+        borderRadius: 4,
+        fontSize: 14,
+    },
     totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.s },
     totalLabel: { fontWeight: '700', fontSize: 16 },
-    totalInput: { 
-        flex: 1, 
-        marginHorizontal: Spacing.s, 
-        paddingHorizontal: Spacing.s, 
-        paddingVertical: Spacing.xs, 
-        backgroundColor: '#fff', 
-        borderWidth: 1, 
-        borderColor: '#ddd', 
+    totalInput: {
+        flex: 1,
+        marginHorizontal: Spacing.s,
+        paddingHorizontal: Spacing.s,
+        paddingVertical: Spacing.xs,
+        backgroundColor: '#fff',
+        borderWidth: 1,
+        borderColor: '#ddd',
         borderRadius: 4,
         fontSize: 16,
         textAlign: 'right'
     },
     totalCurrency: { fontWeight: '700', fontSize: 16, minWidth: 40 },
     totalValue: { fontWeight: '700' },
-    ventaRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.xs, borderBottomWidth: 0, borderColor: '#eee' },
-    ventaName: { flex: 3, color: Colors.textSecondary },
-    ventaQty: { flex: 1, textAlign: 'center', color: Colors.textSecondary },
-    ventaPrice: { flex: 1, textAlign: 'right', color: Colors.textSecondary },
 });

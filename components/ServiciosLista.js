@@ -65,12 +65,16 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
 
     const handleSelect = (id, item) => {
         const precio = item?.comerciable?.precio_cup ?? '';
-
+        const precio_original_cup = item.comerciable.precio_cup;
+        const precio_original_usd = item.comerciable.precio_usd;
+        
         setItems(prev => prev.map(v => v.id === id ? ({
             ...v,
             selected: item,
             precio_cup: precio?.toString() ?? '',
-            cantidad: v.cantidad || '1'
+            cantidad: v.cantidad || '1',
+            precio_original_cup: precio_original_cup,
+            precio_original_usd: precio_original_usd
         }) : v));
     };
 

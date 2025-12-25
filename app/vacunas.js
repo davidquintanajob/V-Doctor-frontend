@@ -334,7 +334,38 @@ export default function VacunasScreen() {
                 </View>
 
                 {/* Botón ancho + Agregar Vacuna */}
-                <TouchableOpacity style={styles.saveButton} onPress={() => { }}>
+                <TouchableOpacity
+                    style={styles.saveButton}
+                    onPress={async () => {
+                        try {
+                            const raw = await AsyncStorage.getItem('@config');
+                            const cfg = raw ? JSON.parse(raw) : {};
+                            // posible ubicaciones del usuario en la config
+                            const usuario = cfg.user || cfg.usuario || cfg.userdata || cfg.userData || null;
+
+                            const fecha = new Date().toISOString();
+                            const consultaToPass = {
+                                fecha: fecha,
+                                motivo: 'Vacunación del paciente',
+                                anamnesis: 'El cliente quiere vacunar al paciente',
+                                paciente: pacienteParam || pacienteData,
+                                usuario: usuario,
+                            };
+
+                            router.push({
+                                pathname: '/historia_clinicaModal',
+                                params: {
+                                    mode: 'crear',
+                                    consulta: JSON.stringify(consultaToPass),
+                                    paciente: JSON.stringify(pacienteParam || pacienteData),
+                                }
+                            });
+                        } catch (e) {
+                            console.error('Error preparando nueva consulta:', e);
+                            Alert.alert('Error', 'No se pudo abrir el modal de consulta');
+                        }
+                    }}
+                >
                     <Text style={styles.saveButtonText}>+ Agregar Vacuna</Text>
                 </TouchableOpacity>
 

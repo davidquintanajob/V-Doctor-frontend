@@ -16,9 +16,9 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
                 const qty = parseFloat(item.cantidad || '0') || 0;
                 // Preferir el precio original del comerciable (cuando viene en `initial`),
                 // luego el costo/precio del producto y como fallback el precio del comerciable
-                const cost = parseFloat(item.precio_original_comerciable_cup ?? item.selected.producto?.precio_cup ?? item.selected.producto?.comerciable?.precio_cup ?? '0') || 0;
+                const precio_medicamento = parseFloat(item.precio_original_comerciable_cup ?? item.selected.producto?.precio_cup ?? item.selected.producto?.comerciable?.precio_cup ?? '0') || 0;
                 totalCobrar += price * qty;
-                totalProfit += (price * qty) - (cost * qty);
+                totalProfit += (price * qty) - (precio_medicamento * qty);
             }
         });
         return {
@@ -77,6 +77,8 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
         const unidad = item?.unidad_medida ?? '';
         const categoria = item?.producto?.categoria ?? '';
         const posologia = item?.posologia ?? '';
+        const precio_original_cup = item.producto.comerciable.precio_cup;
+        const precio_original_usd = item.producto.comerciable.precio_usd;
 
         setItems(prev => prev.map(v => v.id === id ? ({
             ...v,
@@ -85,7 +87,9 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
             categoria: categoria,
             posologia: posologia,
             precio_cup: precio?.toString() ?? '',
-            cantidad: v.cantidad || '1'
+            cantidad: v.cantidad || '1',
+            precio_original_cup: precio_original_cup,
+            precio_original_usd: precio_original_usd
         }) : v));
     };
 
@@ -196,8 +200,8 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
                                         const qty = parseFloat(entry.cantidad || '0');
                                         // Preferir el precio original del comerciable (cuando viene en `initial`),
                                         // luego el costo/precio del producto y como fallback el precio del comerciable
-                                        const cost = parseFloat(entry.precio_original_comerciable_cup ?? entry.selected.producto?.precio_cup ?? entry.selected.producto?.comerciable?.precio_cup ?? '0');
-                                        const profit = (price * qty) - (cost * qty);
+                                        const producto_precio = parseFloat(entry.precio_original_comerciable_cup ?? entry.selected.producto?.precio_cup ?? entry.selected.producto?.comerciable?.precio_cup ?? '0');
+                                        const profit = (price * qty) - (producto_precio * qty);
                                         return isNaN(profit) ? '0' : Math.max(0, profit).toFixed(2);
                                     })()}
                                 </Text>

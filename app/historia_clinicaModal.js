@@ -1765,13 +1765,12 @@ export default function HistoriaClinicaModalScreen() {
             const buildVentaFromEntry = (entry, tipo) => {
                 const sel = entry.selected || {};
                 let producto = sel.producto || sel || {};
-                console.log("Venta de ", tipo, " : ", JSON.stringify(entry, null, 2));
-
+                
                 return {
                     fecha: entry.fecha || new Date(consultaData.fecha).toISOString(),
                     id_venta: entry.id_venta || null,
-                    precio_original_comerciable_cup: parseFloat(entry.precio_original_comerciable_cup || 0) || 0,
-                    precio_original_comerciable_usd: parseFloat(entry.precio_original_comerciable_usd || 0) || 0,
+                    precio_original_comerciable_cup: parseFloat(entry.precio_original_cup || 0) || 0,
+                    precio_original_comerciable_usd: parseFloat(entry.precio_original_usd || 0) || 0,
                     costo_producto_cup: entry.costo_producto_cup,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
@@ -1780,7 +1779,7 @@ export default function HistoriaClinicaModalScreen() {
                     id_usuario: usuariosIds || [],
                 };
             };
-
+            
             medicamentosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'medicamentos')));
             vacunasItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'vacunas')));
             antiparasitariosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'antiparasitarios')));
@@ -1820,7 +1819,7 @@ export default function HistoriaClinicaModalScreen() {
             // Ejemplo de la llamada (dejada comentada según petición)
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
-
+            
             const res = await fetch(urlUpdate, { method: 'PUT', headers, body: JSON.stringify(payload) });
             let responseData = null;
             try { responseData = await res.json(); } catch (e) { responseData = null; }

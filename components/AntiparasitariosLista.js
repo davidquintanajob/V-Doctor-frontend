@@ -75,6 +75,8 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
         const unidad = item?.unidad_medida ?? '';
         const categoria = item?.producto?.categoria ?? '';
         const posologia = item?.posologia ?? '';
+        const precio_original_cup = item.producto.comerciable.precio_cup;
+        const precio_original_usd = item.producto.comerciable.precio_usd;
 
         setItems(prev => prev.map(v => v.id === id ? ({
             ...v,
@@ -83,7 +85,9 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
             categoria: categoria,
             posologia: posologia,
             precio_cup: precio?.toString() ?? '',
-            cantidad: v.cantidad || '1'
+            cantidad: v.cantidad || '1',
+            precio_original_cup: precio_original_cup,
+            precio_original_usd: precio_original_usd
         }) : v));
     };
 

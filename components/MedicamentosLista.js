@@ -72,12 +72,17 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
             ToastAndroid.show('No hay cantidad de este producto para ser vendido', ToastAndroid.SHORT);
             return;
         }
-
+        
+        //console.log(JSON.stringify(item,null,2));
+        
         const precio = item?.producto?.comerciable?.precio_cup ?? '';
         const unidad = item?.unidad_medida ?? '';
         const categoria = item?.producto?.categoria ?? '';
         const posologia = item?.posologia ?? '';
-
+        const precio_original_cup = item.producto.comerciable.precio_cup;
+        const precio_original_usd = item.producto.comerciable.precio_usd;
+        
+        
         setItems(prev => prev.map(v => v.id === id ? ({
             ...v,
             selected: item,
@@ -85,7 +90,9 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
             categoria: categoria,
             posologia: posologia,
             precio_cup: precio?.toString() ?? '',
-            cantidad: v.cantidad || '1'
+            cantidad: v.cantidad || '1',
+            precio_original_cup: precio_original_cup,
+            precio_original_usd: precio_original_usd
         }) : v));
     };
 
