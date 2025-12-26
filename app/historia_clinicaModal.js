@@ -6,6 +6,7 @@ import {
     TouchableOpacity,
     TextInput,
     ScrollView,
+    FlatList,
     Dimensions,
     ToastAndroid,
     Alert,
@@ -26,7 +27,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import Modal from 'react-native/Libraries/Modal/Modal';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
-import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
 import AutocompleteTextInput from '../components/AutocompleteTextInput';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -91,6 +93,14 @@ export default function HistoriaClinicaModalScreen() {
     const [mostrarNotaIndex, setMostrarNotaIndex] = useState(null);
     const [notaActual, setNotaActual] = useState('');
     const [imagenFullscreen, setImagenFullscreen] = useState(null);
+
+    // Estados y refs para cámara/galería usando expo-camera y expo-media-library
+    const [cameraModalVisible, setCameraModalVisible] = useState(false);
+    const cameraRef = React.useRef(null);
+    const [cameraType, setCameraType] = useState('back');
+    const [cameraReady, setCameraReady] = useState(false);
+    const [galleryModalVisible, setGalleryModalVisible] = useState(false);
+    const [mediaAssets, setMediaAssets] = useState([]);
 
     // AGREGAR estos estados después de los otros estados principales (al principio del componente)
     const [initialMedicamentos, setInitialMedicamentos] = useState([]);
@@ -489,80 +499,37 @@ export default function HistoriaClinicaModalScreen() {
         return '';
     };
 
-    // Función para abrir la cámara
+    // Función para abrir la cámara: abre un modal con componente Camera
     const openCamera = async () => {
         try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la cámara.');
-                return;
-            }
 
-            const result = await ImagePicker.launchCameraAsync({
-                quality: 0.7,
-                allowsEditing: true,
-                aspect: [4, 3],
-                base64: false, // No obtener base64 directamente, lo convertiremos después
-            });
+            // Abrir modal
+            setCameraModalVisible(true);
 
-            // SDK newer uses result.assets
-            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
-            if (uri) {
-                // Convertir a base64
-                const base64 = await uriToBase64(uri);
-                if (base64) {
-                    // Agregar la imagen al array de fotos
-                    const nuevaFoto = {
-                        uri: uri,
-                        base64: base64,
-                        nota: '' // Nota inicial vacía
-                    };
-                    setFotos(prev => [...prev, nuevaFoto]);
-                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
-                } else {
-                    Alert.alert('Error', 'No se pudo procesar la imagen');
-                }
-            }
-        } catch (err) {
-            console.error('Error opening camera', err);
-            Alert.alert('Error', 'No se pudo abrir la cámara.');
+        } catch (error) {
+            console.error('Error abriendo cámara:', error);
+            Alert.alert('Error', 'No se pudo abrir la cámara: ' + error.message);
         }
     };
 
-    // Función para abrir la galería
+    // Función para abrir galería: solicita permisos y carga assets para mostrar en modal
     const openGallery = async () => {
         try {
-            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            const { status } = await MediaLibrary.requestPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la galería.');
                 return;
             }
 
-            const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                quality: 0.7,
-                allowsEditing: true,
-                aspect: [4, 3],
-                base64: false,
+            // Cargar assets (fotos) recientes
+            const res = await MediaLibrary.getAssetsAsync({
+                mediaType: ['photo'],
+                first: 200,
+                sortBy: [MediaLibrary.SortBy.creationTime],
             });
 
-            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
-            if (uri) {
-                // Convertir a base64
-                const base64 = await uriToBase64(uri);
-                if (base64) {
-                    // Agregar la imagen al array de fotos
-                    const nuevaFoto = {
-                        uri: uri,
-                        base64: base64,
-                        nota: '' // Nota inicial vacía
-                    };
-                    setFotos(prev => [...prev, nuevaFoto]);
-                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
-                } else {
-                    Alert.alert('Error', 'No se pudo procesar la imagen');
-                }
-            }
+            setMediaAssets(res.assets || []);
+            setGalleryModalVisible(true);
         } catch (err) {
             console.error('Error opening gallery', err);
             Alert.alert('Error', 'No se pudo abrir la galería.');
@@ -1765,7 +1732,7 @@ export default function HistoriaClinicaModalScreen() {
             const buildVentaFromEntry = (entry, tipo) => {
                 const sel = entry.selected || {};
                 let producto = sel.producto || sel || {};
-                
+
                 return {
                     fecha: entry.fecha || new Date(consultaData.fecha).toISOString(),
                     id_venta: entry.id_venta || null,
@@ -1779,7 +1746,7 @@ export default function HistoriaClinicaModalScreen() {
                     id_usuario: usuariosIds || [],
                 };
             };
-            
+
             medicamentosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'medicamentos')));
             vacunasItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'vacunas')));
             antiparasitariosItems.forEach(e => ventas.push(buildVentaFromEntry(e, 'antiparasitarios')));
@@ -1808,7 +1775,7 @@ export default function HistoriaClinicaModalScreen() {
 
             // Construir url
             const urlUpdate = `${host.replace(/\/+$/, '')}/consulta/UpdateWithPhotosVentas/${consultaData.id_consulta || consultaParam?.id_consulta || consultaParam?.id}`;
-            
+
             // Por ahora commented out la llamada a la API — sólo logs para pruebas
             // Excluir las imágenes (base64) del log por privacidad/volumen
             const payloadForLog = { ...payload };
@@ -1819,7 +1786,7 @@ export default function HistoriaClinicaModalScreen() {
             // Ejemplo de la llamada (dejada comentada según petición)
             const headers = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
-            
+
             const res = await fetch(urlUpdate, { method: 'PUT', headers, body: JSON.stringify(payload) });
             let responseData = null;
             try { responseData = await res.json(); } catch (e) { responseData = null; }
@@ -1988,6 +1955,168 @@ export default function HistoriaClinicaModalScreen() {
     };
 
     // List components removed
+    const CameraModal = () => {
+        // 1. Usa el hook moderno para permisos
+        const [permission, requestPermission] = useCameraPermissions();
+        const [isCameraReady, setIsCameraReady] = useState(false);
+
+        // 2. Efecto para solicitar permiso al abrir el modal
+        useEffect(() => {
+            if (cameraModalVisible && permission && !permission.granted) {
+                requestPermission();
+            }
+        }, [cameraModalVisible, permission]);
+
+        const handleCapture = async () => {
+            if (!cameraRef.current || !isCameraReady) {
+                ToastAndroid.show('Cámara no lista', ToastAndroid.SHORT);
+                return;
+            }
+            try {
+                // 3. Toma la foto usando la nueva API
+                const photo = await cameraRef.current.takePictureAsync({
+                    quality: 0.7,
+                    skipProcessing: true
+                });
+
+                const base64 = await uriToBase64(photo.uri);
+                if (base64) {
+                    setFotos(prev => [...prev, {
+                        uri: photo.uri,
+                        base64,
+                        nota: ''
+                    }]);
+                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
+                    setCameraModalVisible(false);
+                }
+            } catch (err) {
+                console.error('Error tomando foto:', err);
+                Alert.alert('Error', 'No se pudo tomar la foto');
+            }
+        };
+
+        if (!cameraModalVisible) return null;
+
+        // Estados del permiso
+        if (!permission) {
+            // Permisos aún cargando
+            return (
+                <Modal visible={cameraModalVisible} transparent animationType="slide">
+                    <View style={styles.cameraLoadingContainer}>
+                        <ActivityIndicator size="large" color="#fff" />
+                        <Text style={styles.cameraLoadingText}>Cargando permisos...</Text>
+                    </View>
+                </Modal>
+            );
+        }
+
+        if (!permission.granted) {
+            // Permisos no concedidos
+            return (
+                <Modal visible={cameraModalVisible} transparent animationType="slide">
+                    <View style={styles.cameraPermissionContainer}>
+                        <Text style={styles.cameraPermissionText}>
+                            La aplicación necesita acceso a la cámara para tomar fotos de las consultas.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.cameraPermissionButton}
+                            onPress={requestPermission}
+                        >
+                            <Text style={styles.cameraPermissionButtonText}>Conceder permiso</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.cameraPermissionButton, { backgroundColor: 'transparent', marginTop: 10 }]}
+                            onPress={() => setCameraModalVisible(false)}
+                        >
+                            <Text style={[styles.cameraPermissionButtonText, { color: '#fff' }]}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
+            );
+        }
+
+        // 4. Permisos concedidos: mostrar la cámara con el componente CameraView
+        return (
+            <Modal visible={cameraModalVisible} transparent animationType="slide">
+                <View style={styles.cameraFullScreen}>
+                    <View style={styles.cameraHeader}>
+                        <TouchableOpacity
+                            style={styles.cameraCloseBtn}
+                            onPress={() => setCameraModalVisible(false)}
+                        >
+                            <Text style={styles.cameraCloseText}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.cameraContent}>
+                        {/* Usa CameraView en lugar de Camera */}
+                        <CameraView
+                            ref={cameraRef}
+                            style={StyleSheet.absoluteFillObject}
+                            facing="back" // Tipo simplificado
+                            onCameraReady={() => setIsCameraReady(true)}
+                        />
+                    </View>
+
+                    <View style={styles.cameraFooter}>
+                        <TouchableOpacity
+                            style={styles.captureBtn}
+                            onPress={handleCapture}
+                        >
+                            <View style={styles.captureBtnInner} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
+
+    // Modal para seleccionar imagen de la galería usando expo-media-library
+    const GalleryModal = () => {
+        if (!galleryModalVisible) return null;
+
+        const handleSelect = async (asset) => {
+            try {
+                const uri = asset.uri;
+                const base64 = await uriToBase64(uri);
+                if (base64) {
+                    const nuevaFoto = { uri, base64, nota: '' };
+                    setFotos(prev => [...prev, nuevaFoto]);
+                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
+                } else {
+                    Alert.alert('Error', 'No se pudo procesar la imagen');
+                }
+            } catch (err) {
+                console.error('Error selecting asset', err);
+                Alert.alert('Error', 'No se pudo seleccionar la imagen');
+            } finally {
+                setGalleryModalVisible(false);
+            }
+        };
+
+        return (
+            <Modal visible={galleryModalVisible} transparent animationType="slide">
+                <View style={styles.galleryOverlay}>
+                    <View style={styles.galleryHeader}>
+                        <TouchableOpacity onPress={() => setGalleryModalVisible(false)}>
+                            <Text style={styles.notaButtonText}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <FlatList
+                        data={mediaAssets}
+                        numColumns={4}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity onPress={() => handleSelect(item)} style={{ margin: Spacing.xs }}>
+                                <Image source={{ uri: item.uri }} style={styles.galleryThumb} />
+                            </TouchableOpacity>
+                        )}
+                    />
+                </View>
+            </Modal>
+        );
+    };
 
     return (
         <View style={styles.container}>
@@ -1995,6 +2124,10 @@ export default function HistoriaClinicaModalScreen() {
 
             {/* Modal para vista completa de imagen */}
             <FullscreenImageModal />
+            {/* Modal para tomar foto */}
+            <CameraModal />
+            {/* Modal para seleccionar desde galería */}
+            <GalleryModal />
 
             {/* Modal bloqueante mientras se cargan los usuarios */}
             <Modal visible={usuariosLoading} transparent animationType="none">
@@ -2864,5 +2997,119 @@ const styles = StyleSheet.create({
     },
     buttonDisabled: {
         opacity: 0.6,
+    },
+    cameraFullScreen: {
+        flex: 1,
+        backgroundColor: '#000',
+    },
+    cameraHeader: {
+        height: 60,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        paddingHorizontal: 16,
+        zIndex: 10,
+    },
+    cameraCloseBtn: {
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    cameraCloseText: {
+        color: '#fff',
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    cameraContent: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: '#000',
+    },
+    cameraWrapper: {
+        width: '100%',
+        height: '100%',
+        position: 'relative',
+    },
+    cameraLoading: {
+        alignItems: 'center',
+        padding: 20,
+    },
+    cameraLoadingText: {
+        color: '#fff',
+        marginTop: 10,
+        fontSize: 16,
+    },
+    cameraErrorText: {
+        color: '#fff',
+        fontSize: 18,
+        textAlign: 'center',
+        marginBottom: 20,
+    },
+    cameraPreparing: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.7)',
+    },
+    cameraPreparingText: {
+        color: '#fff',
+        marginTop: 10,
+        fontSize: 16,
+    },
+    cameraFooter: {
+        height: 120,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    captureBtn: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        borderWidth: 3,
+        borderColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    captureBtnInner: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#fff',
+    },
+    cameraActionBtn: {
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+        marginTop: 10,
+    },
+    cameraActionText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    galleryOverlay: {
+        flex: 1,
+        backgroundColor: '#fff',
+        paddingTop: Spacing.m,
+    },
+    galleryHeader: {
+        paddingHorizontal: Spacing.m,
+        paddingBottom: Spacing.s,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        alignItems: 'flex-end',
+    },
+    galleryThumb: {
+        width: (screenWidth - (Spacing.m * 2) - (Spacing.xs * 6)) / 4,
+        height: (screenWidth - (Spacing.m * 2) - (Spacing.xs * 6)) / 4,
+        borderRadius: 6,
     },
 });
