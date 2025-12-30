@@ -411,7 +411,7 @@ export default function ProductoModalScreen() {
                             </View>
                         </View>
 
-                        <View style={styles.twoColumnRow}>
+                        {isAdmin && (<View style={styles.twoColumnRow}>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Costo USD *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.costo_usd} onChangeText={handleCostoUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
@@ -420,9 +420,9 @@ export default function ProductoModalScreen() {
                                 <Text style={styles.label}>Costo CUP *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.costo_cup} onChangeText={handleCostoCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
                             </View>
-                        </View>
+                        </View>)}
 
-                        <View style={styles.twoColumnRow}>
+                        {isAdmin && (<View style={styles.twoColumnRow}>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Precio USD *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.precio_usd} onChangeText={handlePrecioUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
@@ -431,7 +431,7 @@ export default function ProductoModalScreen() {
                                 <Text style={styles.label}>Precio CUP *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={productoData.precio_cup} onChangeText={handlePrecioCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
                             </View>
-                        </View>
+                        </View>)}
 
                         {/* Roles autorizados */}
                         <View style={styles.inputGroup}>

@@ -424,7 +424,7 @@ export default function MedicamentoModalScreen() {
                             <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.posologia} onChangeText={(t) => setMedicamentoData(prev => ({ ...prev, posologia: t }))} editable={isEditable} placeholder="Ej: 1 tab cada 8 horas" />
                         </View>
 
-                        <View style={styles.twoColumnRow}>
+                        {isAdmin && (<View style={styles.twoColumnRow}>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Costo USD *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.costo_usd} onChangeText={handleCostoUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
@@ -433,9 +433,9 @@ export default function MedicamentoModalScreen() {
                                 <Text style={styles.label}>Costo CUP *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.costo_cup} onChangeText={handleCostoCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
                             </View>
-                        </View>
+                        </View>)}
 
-                        <View style={styles.twoColumnRow}>
+                        {isAdmin && (<View style={styles.twoColumnRow}>
                             <View style={styles.column}>
                                 <Text style={styles.label}>Precio USD *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.precio_usd} onChangeText={handlePrecioUSDChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0.00" />
@@ -444,7 +444,7 @@ export default function MedicamentoModalScreen() {
                                 <Text style={styles.label}>Precio CUP *</Text>
                                 <TextInput style={[styles.input, !isEditable && styles.disabledInput]} value={medicamentoData.precio_cup} onChangeText={handlePrecioCUPChange} keyboardType="decimal-pad" editable={isEditable} placeholder="0" />
                             </View>
-                        </View>
+                        </View>)}
 
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>Roles autorizados *</Text>
