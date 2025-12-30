@@ -123,6 +123,90 @@ export default function HistoriaClinicaModalScreen() {
     // Scroll + posiciones para validación y scroll automático
     const scrollRef = React.useRef(null);
     const positionsRef = React.useRef({});
+    const autoTratamientoRef = React.useRef({}); // map key -> last generated part
+
+    // Sincronizar automáticamente `tratamiento` en modo 'crear' con las notas de las listas
+    React.useEffect(() => {
+        if (mode !== 'crear') return;
+
+        let mounted = true;
+
+        const buildTratamientoParts = () => {
+            try {
+                const refs = [medicamentosListRef, productosListRef, vacunasListRef, antiparasitariosListRef];
+                const parts = [];
+
+                refs.forEach(r => {
+                    const items = (r && r.current && typeof r.current.getItems === 'function') ? (r.current.getItems() || []) : [];
+                    items.forEach(it => {
+                        const nota = (it.nota_list ?? it.nota ?? '').toString().trim();
+                        if (nota) {
+                            const name = (it.selected && (it.selected.producto?.nombre || it.selected.nombre)) || (it.producto && it.producto.nombre) || it.nombre || '';
+                            if (name) {
+                                // Use stable key per item (prefer id if present, fallback to name)
+                                const key = (it.id ?? it.selected?.id ?? `name:${name}`).toString();
+                                parts.push({ key, part: `${name}: ${nota}.` });
+                            }
+                        }
+                    });
+                });
+
+                return parts; // array of {key, part}
+            } catch (err) {
+                console.error('Error building tratamiento from lists:', err);
+                return [];
+            }
+        };
+
+        // Initial sync
+        const syncNow = () => {
+            if (!mounted) return;
+            const newParts = buildTratamientoParts();
+            if (!Array.isArray(newParts) || newParts.length === 0) return;
+
+            const prevAutoMap = (autoTratamientoRef.current && typeof autoTratamientoRef.current === 'object') ? autoTratamientoRef.current : {};
+            const newKeys = newParts.map(p => p.key);
+
+            // We'll update tratamiento by replacing existing auto parts for the same key,
+            // or appending if a key is new. We will NOT remove text when items disappear.
+            setConsultaData(prev => {
+                if (!prev) return prev;
+                let text = (prev.tratamiento || '').trim();
+
+                newParts.forEach(({ key, part }) => {
+                    const prevPart = prevAutoMap[key];
+                    if (prevPart) {
+                        // Replace old part occurrence with new part once (avoid multiple replacements)
+                        if (prevPart !== part && text.includes(prevPart)) {
+                            text = text.replace(prevPart, part);
+                        } else if (!text.includes(part)) {
+                            // if previous part not found but new part also not present, append
+                            text = text ? text + ' ' + part : part;
+                        }
+                    } else {
+                        // new key -> append if not already present
+                        if (!text.includes(part)) {
+                            text = text ? text + ' ' + part : part;
+                        }
+                    }
+
+                    // update map for this key
+                    prevAutoMap[key] = part;
+                });
+
+                // store updated map back
+                autoTratamientoRef.current = prevAutoMap;
+
+                return { ...prev, tratamiento: text };
+            });
+        };
+
+        syncNow();
+
+        // Polling ligero para detectar cambios en las listas (se limpia al desmontar)
+        const iv = setInterval(syncNow, 700);
+        return () => { mounted = false; clearInterval(iv); };
+    }, [mode, medicamentosListRef, productosListRef, vacunasListRef, antiparasitariosListRef]);
 
     // Estado para datos del paciente (descuento)
     const [pacienteData, setPacienteData] = useState(null);
