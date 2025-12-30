@@ -104,32 +104,32 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
         <style>
             @page { margin: 10px; }
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-size: 25px; color: #222; margin: 0; padding: 0; }
-            .container { width: 100%; box-sizing: border-box; padding: 17px; }
-            .top-section { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+            .container { width: 100%; box-sizing: border-box; padding: 10px; }
+            .top-section { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
             .left-header { display: flex; align-items: center; flex: 1; }
-            .logo { max-width: 180px; height: auto; filter: grayscale(100%); margin-right: 17px; }
+            .logo { max-width: 160px; height: auto; filter: grayscale(100%); margin-right: 12px; }
             .doctor-info { flex: 1; }
-            .doctor-label { font-size: 22px; color: #666; }
-            .doctor-name { font-weight: 700; font-size: 25px; color: #222; }
-            .date-container { text-align: right; font-size: 24px; color: #444; }
-            .hr { border-top: 1px solid #ccc; margin: 13px 0; }
-            .patient-info { margin-top: 8px; }
-            .patient-info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+            .doctor-label { font-size: 20px; color: #666; }
+            .doctor-name { font-weight: 700; font-size: 23px; color: #222; }
+            .date-container { text-align: right; font-size: 22px; color: #444; }
+            .hr { border-top: 1px solid #ccc; margin: 8px 0; }
+            .patient-info { margin-top: 6px; }
+            .patient-info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
             .patient-label { font-weight: 600; color: #444; }
             .patient-value { font-weight: 700; color: #222; }
-            .patient-value-clinic { font-weight: 900; color: #000; font-size: 27px; }
-            .clinical-info { margin-top: 17px; }
-            .clinical-section { margin-bottom: 13px; }
-            .clinical-label { font-weight: 700; color: #333; font-size: 24px; margin-bottom: 4px; display: block; }
-            .clinical-value { color: #222; font-size: 25px; line-height: 1.3; padding-left: 8px; border-left: 3px solid #ccc; }
-            .sales-section { margin-top: 17px; }
-            .sales-header { font-weight: 700; font-size: 25px; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 3px; }
-            .sales-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; }
+            .patient-value-clinic { font-weight: 900; color: #000; font-size: 24px; }
+            .clinical-info { margin-top: 10px; }
+            .clinical-section { margin-bottom: 6px; display: flex; align-items: center; }
+            .clinical-label { font-weight: 700; color: #333; font-size: 20px; margin-right: 8px; min-width: 170px; }
+            .clinical-value-inline { color: #222; font-size: 20px; line-height: 1.2; }
+            .sales-section { margin-top: 10px; }
+            .sales-header { font-weight: 700; font-size: 22px; margin-bottom: 6px; border-bottom: 2px solid #333; padding-bottom: 2px; }
+            .sales-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #eee; }
             .sales-item:last-child { border-bottom: none; }
             .item-name { flex: 2; }
             .item-qty { flex: 1; text-align: center; }
-            .item-nota { flex: 1; text-align: center; font-size: 22px; color: #666; font-style: italic; }
-            .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; padding-top: 8px; border-top: 2px solid #333; font-size: 27px; }
+            .item-nota { flex: 1; text-align: center; font-size: 18px; color: #666; font-style: italic; }
+            .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 2px solid #333; font-size: 22px; }
             .signature-section { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 13px; border-top: 1px solid #ccc; }
             .firma { width: 126px; height: auto; filter: grayscale(100%); }
             .sales-header { 
@@ -187,9 +187,9 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             </div>
 
             <div class="clinical-info">
-                ${local.motivo ? `<div class="clinical-section"><span class="clinical-label">Motivo de la consulta:</span><div class="clinical-value">${escapeHtml(local.motivo)}</div></div>` : ''}
-                ${local.diagnostico ? `<div class="clinical-section"><span class="clinical-label">Diagnóstico:</span><div class="clinical-value">${escapeHtml(local.diagnostico)}</div></div>` : ''}
-                ${local.tratamiento ? `<div class="clinical-section"><span class="clinical-label">Tratamiento:</span><div class="clinical-value">${escapeHtml(local.tratamiento)}</div></div>` : ''}
+                ${local.motivo ? `<div class="clinical-section"><span class="clinical-label">Motivo de la consulta:</span><span class="clinical-value-inline">${escapeHtml(local.motivo)}</span></div>` : ''}
+                ${local.diagnostico ? `<div class="clinical-section"><span class="clinical-label">Diagnóstico:</span><span class="clinical-value-inline">${escapeHtml(local.diagnostico)}</span></div>` : ''}
+                ${local.tratamiento ? `<div class="clinical-section"><span class="clinical-label">Tratamiento:</span><span class="clinical-value-inline">${escapeHtml(local.tratamiento)}</span></div>` : ''}
             </div>
 
             <div class="hr"></div>
@@ -341,14 +341,7 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
                                         <Text style={styles.ventaName}>{label}</Text>
                                         <Text style={styles.ventaQty}>{String(v.cantidad || '')}</Text>
                                         <Text style={styles.ventaPrice}>{(v.precio_cobrado_cup != null) ? String(v.precio_cobrado_cup) + ' CUP' : '-'}</Text>
-                                        <TextInput
-                                            style={styles.ventaNotaInput}
-                                            value={ventaNotas[key] || ''}
-                                            onChangeText={(text) => {
-                                                setVentaNotas(prev => ({ ...prev, [key]: text }));
-                                            }}
-                                            placeholder="Nota"
-                                        />
+                                        <Text style={styles.ventaNotaText}>{ventaNotas[key] || v.nota || ''}</Text>
                                     </View>
                                 );
                             }) : <Text style={styles.fieldValue}>Sin ventas</Text>}
@@ -409,6 +402,12 @@ const styles = StyleSheet.create({
         borderColor: '#ddd',
         borderRadius: 4,
         fontSize: 14,
+    },
+    ventaNotaText: {
+        flex: 2,
+        marginLeft: Spacing.s,
+        color: Colors.textSecondary,
+        fontStyle: 'italic'
     },
     totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.s },
     totalLabel: { fontWeight: '700', fontSize: 16 },
