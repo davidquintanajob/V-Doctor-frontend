@@ -57,6 +57,7 @@ export default function PacienteModalScreen() {
     });
 
     const [apiHost, setApiHost] = useState(null);
+    const [isAdmin, setIsAdmin] = useState(false);
     const [token, setToken] = useState(null);
     const [showPacienteInfo, setShowPacienteInfo] = useState(false);
     const [showPacienteColorPicker, setShowPacienteColorPicker] = useState(false);
@@ -334,9 +335,15 @@ export default function PacienteModalScreen() {
             try {
                 const raw = await AsyncStorage.getItem('@config');
                 if (!raw) return;
-                const cfg = JSON.parse(raw);
-                setApiHost(cfg.api_host || cfg.apihost || cfg.apiHost || null);
-                setToken(cfg.token || null);
+                const config = JSON.parse(raw);
+                try {
+                    const user = config.usuario || config.user || {};
+                    setIsAdmin((user && user.rol && String(user.rol) === 'Administrador'));
+                } catch (e) {
+                    setIsAdmin(false);
+                }
+                setApiHost(config.api_host || config.apihost || config.apiHost || null);
+                setToken(config.token || null);
             } catch (e) {
                 console.error('Error loading config', e);
             }
@@ -767,7 +774,7 @@ export default function PacienteModalScreen() {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Descuento (%)</Text>
                                 <TextInput
-                                    style={[styles.input, isView && styles.disabledInput]}
+                                    style={[styles.input, (isView ||           !isAdmin) && styles.disabledInput]}
                                     value={descuento}
                                     onChangeText={(text) => {
                                         const valor = clampDescuento(text.replace(/[^0-9]/g, ''));
@@ -777,7 +784,7 @@ export default function PacienteModalScreen() {
                                     placeholder="0"
                                     placeholderTextColor="#999"
                                     keyboardType="numeric"
-                                    editable={!isView}
+                                    editable={!isView && isAdmin}
                                 />
                             </View>
 
