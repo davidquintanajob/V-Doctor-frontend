@@ -310,6 +310,7 @@ export default function HistoriaClinicaModalScreen() {
                         selected: comerciable.servicio,
                         precio_cup: venta.precio_cobrado_cup?.toString() || '',
                         cantidad: venta.cantidad?.toString() || '1',
+                        nota_list: venta.nota || "",
                         costo_producto_cup: venta.costo_producto_cup,
                         precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
                         precio_original_comerciable_usd: (venta.precio_original_comerciable_usd != null) ? String(venta.precio_original_comerciable_usd) : (venta.costo_producto_usd != null ? String(venta.costo_producto_usd) : undefined)
@@ -333,6 +334,7 @@ export default function HistoriaClinicaModalScreen() {
                             precio_cup: venta.precio_cobrado_cup?.toString() || '',
                             cantidad: venta.cantidad?.toString() || '1',
                             costo_producto_cup: venta.costo_producto_cup,
+                            nota_list: venta.nota || "",
                             precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
                             precio_original_comerciable_usd: (venta.precio_original_comerciable_usd != null) ? String(venta.precio_original_comerciable_usd) : (venta.costo_producto_usd != null ? String(venta.costo_producto_usd) : undefined)
                         };
@@ -361,6 +363,7 @@ export default function HistoriaClinicaModalScreen() {
                             precio_cup: venta.precio_cobrado_cup?.toString() || '',
                             // cantidad vendida
                             cantidad: venta.cantidad?.toString() || '1',
+                            nota_list: venta.nota || "",
                             costo_producto_cup: venta.costo_producto_cup,
                             // precio original del comerciable (necesario para calcular el plus)
                             precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
@@ -1425,6 +1428,7 @@ export default function HistoriaClinicaModalScreen() {
                     precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
                     costo_producto_cup: 0, // Los servicios no tienen costo de producto
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    nota: entry.nota_list || "",
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_consulta: id_consulta,
@@ -1442,6 +1446,7 @@ export default function HistoriaClinicaModalScreen() {
                     precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
                     costo_producto_cup: parseFloat(producto.costo_cup || producto.costo_producto_cup || 0) || 0,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    nota: entry.nota_list || "",
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_consulta: id_consulta,
@@ -1452,13 +1457,14 @@ export default function HistoriaClinicaModalScreen() {
                 // Para medicamentos, vacunas y antiparasitarios
                 const producto = sel.producto || {};
                 const comerciable = producto.comerciable || {};
-
+    
                 body = {
                     fecha: new Date(consultaData.fecha).toISOString(),
                     precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
                     precio_original_comerciable_usd: parseFloat(comerciable.precio_usd || 0) || 0,
                     costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    nota: entry.nota_list || "",
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_consulta: id_consulta,
@@ -1784,6 +1790,7 @@ export default function HistoriaClinicaModalScreen() {
                     precio_original_comerciable_usd: parseFloat(entry.precio_original_usd || entry.precio_original_comerciable_usd) || 0,
                     costo_producto_cup: entry.costo_producto_cup,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
+                    nota: entry.nota_list || "",
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_comerciable: parseInt(entry.selected?.producto?.id_comerciable || entry.selected?.id_comerciable || 0, 10) || 0,

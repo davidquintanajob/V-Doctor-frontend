@@ -2,6 +2,7 @@ import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ToastAndroid } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
+import AutocompleteTextInput from './AutocompleteTextInput';
 
 const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
     const [items, setItems] = useState(initial || []);
@@ -42,7 +43,8 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
 
     // Actualizar items cuando initial cambie
     React.useEffect(() => {
-        setItems(initial || []);
+        // Normalizar initial para asegurar que cada elemento tenga `nota_list`
+        setItems((initial || []).map(it => ({ ...it, nota_list: it.nota_list ?? '' })));
     }, [initial]);
 
     const addItem = () => {
@@ -53,6 +55,7 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
             categoria: '',
             posologia: '',
             precio_cup: '',
+            nota_list: '',
             cantidad: '1'
         }]));
     };
@@ -92,7 +95,8 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
             precio_cup: precio?.toString() ?? '',
             cantidad: v.cantidad || '1',
             precio_original_cup: precio_original_cup,
-            precio_original_usd: precio_original_usd
+            precio_original_usd: precio_original_usd,
+            nota_list: v.nota_list
         }) : v));
     };
 
@@ -154,6 +158,15 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
                             multiline
                             numberOfLines={2}
                             textAlignVertical="top"
+                        />
+
+                        <AutocompleteTextInput
+                            style={[styles.input, {marginBottom: Spacing.s}]}
+                            value={entry.nota_list ?? ''}
+                            onChangeText={(text) => updateItemField(entry.id, 'nota_list', text)}
+                            editable={isEditable}
+                            placeholderTextColor="#999"
+                            placeholder="Nota"
                         />
 
                         <View style={styles.inputsRow}>

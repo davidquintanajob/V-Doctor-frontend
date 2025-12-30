@@ -2,6 +2,7 @@ import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ToastAndroid } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
+import AutocompleteTextInput from './AutocompleteTextInput';
 
 const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
     const [items, setItems] = useState(initial || []);
@@ -39,9 +40,9 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
         }
     }, [items]);
 
-    // Actualizar items cuando initial cambie
+    // Actualizar items cuando initial cambie (asegurar `nota_list`)
     React.useEffect(() => {
-        setItems(initial || []);
+        setItems((initial || []).map(it => ({ ...it, nota_list: it.nota_list ?? '' })));
     }, [initial]);
     const addItem = () => {
         setItems(prev => ([...prev, {
@@ -51,6 +52,7 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
             categoria: '',
             posologia: '',
             precio_cup: '',
+            nota_list: '',
             cantidad: '1'
         }]));
     };
@@ -87,7 +89,8 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
             precio_cup: precio?.toString() ?? '',
             cantidad: v.cantidad || '1',
             precio_original_cup: precio_original_cup,
-            precio_original_usd: precio_original_usd
+            precio_original_usd: precio_original_usd,
+            nota_list: v.nota_list
         }) : v));
     };
 
@@ -149,6 +152,15 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
                             multiline
                             numberOfLines={2}
                             textAlignVertical="top"
+                        />
+
+                        <AutocompleteTextInput
+                            style={[styles.input, {marginBottom: Spacing.s}]}
+                            value={entry.nota_list ?? ''}
+                            onChangeText={(text) => updateItemField(entry.id, 'nota_list', text)}
+                            editable={isEditable}
+                            placeholderTextColor="#999"
+                            placeholder="Nota"
                         />
 
                         <View style={styles.inputsRow}>

@@ -2,6 +2,7 @@ import React, { useState, forwardRef, useImperativeHandle } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ToastAndroid } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
+import AutocompleteTextInput from './AutocompleteTextInput';
 import QRScannerModal from './QRScannerModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -46,9 +47,9 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
         }
     }, [items]);
 
-    // Actualizar items cuando initial cambie
+    // Actualizar items cuando initial cambie (asegurar `nota_list`)
     React.useEffect(() => {
-        setItems(initial || []);
+        setItems((initial || []).map(it => ({ ...it, nota_list: it.nota_list ?? '' })));
     }, [initial]);
 
     // Cargar configuración de API
@@ -74,6 +75,7 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
             selected: null,
             codigo: '',
             precio_cup: '',
+            nota_list: '',
             cantidad: '1'
         }]));
     };
@@ -106,7 +108,8 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
             precio_cup: precio?.toString() ?? '',
             cantidad: v.cantidad || '1',
             precio_original_cup: precio_original_cup,
-            precio_original_usd: precio_original_usd
+            precio_original_usd: precio_original_usd,
+            nota_list: v.nota_list
         }) : v));
     };
 
@@ -242,6 +245,16 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
                                 />
                             </TouchableOpacity>
                         </View>
+
+
+                        <AutocompleteTextInput
+                            style={[styles.input, {marginBottom: Spacing.s}]}
+                            value={entry.nota_list ?? ''}
+                            onChangeText={(text) => updateItemField(entry.id, 'nota_list', text)}
+                            editable={isEditable}
+                            placeholderTextColor="#999"
+                            placeholder="Nota"
+                        />
 
                         <View style={styles.inputsRow}>
                             <TextInput
