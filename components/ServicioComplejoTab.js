@@ -8,6 +8,7 @@ import eventBus from '../utils/eventBus';
 
 export default function ServicioComplejoTab() {
   const router = useRouter();
+  const [isAdmin, setIsAdmin] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [filters, setFilters] = useState({ 
     tipo_servicio: '', 
@@ -32,6 +33,12 @@ export default function ServicioComplejoTab() {
         try {
           const cfg = JSON.parse(configRaw);
           setApiHost(cfg.api_host || cfg.apihost || cfg.apiHost || '');
+          try {
+            const user = cfg.usuario || cfg.user || {};
+            setIsAdmin(!!(user && (user.rol === 'Administrador' || user.role === 'Administrador' || String(user.rol_nombre || user.rol || user.role || '').toLowerCase() === 'administrador')));
+          } catch (e) {
+            setIsAdmin(false);
+          }
         } catch (e) { }
       }
     };
@@ -278,11 +285,13 @@ export default function ServicioComplejoTab() {
         )}
       </View>
 
-      <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.addButton} onPress={handleCreate}>
-          <Text style={styles.addButtonText}>Agregar Servicio Complejo</Text>
-        </TouchableOpacity>
-      </View>
+      {isAdmin && (
+        <View style={styles.actionsContainer}>
+          <TouchableOpacity style={styles.addButton} onPress={handleCreate}>
+            <Text style={styles.addButtonText}>Agregar Servicio Complejo</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View style={styles.tableContainer}>
         <DataTable

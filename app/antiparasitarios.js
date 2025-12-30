@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Image, Alert, ActivityIndicator, Modal, ScrollView, StyleSheet, ToastAndroid } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PatientSidebarMenu from '../components/PatientSidebarMenu';
 import { Colors, Spacing, Typography } from '../variables';
@@ -52,7 +52,7 @@ export default function AntiparasitariosScreen() {
     }, [pacienteParam]);
 
     // función reutilizable para cargar antiparasitarios (ventas filtradas)
-    const fetchAntiparasitarios = async () => {
+    const fetchAntiparasitarios = useCallback(async () => {
         if (!pacienteId) return;
         setLoadingAntiparasitarios(true);
         try {
@@ -104,11 +104,24 @@ export default function AntiparasitariosScreen() {
         } finally {
             setLoadingAntiparasitarios(false);
         }
-    };
+    }, [pacienteId]);
 
+    // Carga inicial
     useEffect(() => {
         fetchAntiparasitarios();
-    }, [pacienteId]);
+    }, [fetchAntiparasitarios]);
+
+    // Ejecutar cada vez que la pantalla reciba foco
+    useFocusEffect(
+        useCallback(() => {
+            fetchAntiparasitarios();
+            
+            // Opcional: Si necesitas limpieza al salir de la pantalla
+            return () => {
+                // Código de limpieza si es necesario
+            };
+        }, [fetchAntiparasitarios])
+    );
 
     const calculateAgeFromDate = (birthDate) => {
         const now = new Date();

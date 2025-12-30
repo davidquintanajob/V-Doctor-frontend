@@ -331,16 +331,16 @@ export default function MedicamentoModalScreen() {
     const entradasColumns = [
         { key: 'fecha', label: 'Fecha', width: 140, cellRenderer: (v) => <Text style={styles.cellText}>{v ? (new Date(v)).toLocaleDateString() : 'N/A'}</Text> },
         { key: 'cantidad', label: 'Cantidad', width: 100, cellRenderer: (v) => <Text style={styles.cellText}>{v ?? '0'}</Text> },
-        { key: 'costo_usd', label: 'Costo USD', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v ? `$${Number(v).toFixed(2)}` : 'N/A'}</Text> },
-        { key: 'costo_cup', label: 'Costo CUP', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v ?? 'N/A'}</Text> },
-        { key: 'nombre_proveedor', label: 'Proveedor', width: 180, cellRenderer: (v) => <Text style={styles.cellText}>{v || 'N/A'}</Text> }
+        { key: 'costo_usd', label: 'Costo USD', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v ? `$${Number(v).toFixed(2)}` : '0'}</Text> },
+        { key: 'costo_cup', label: 'Costo CUP', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v ? `$${Number(v).toFixed(2)}` : '0'}</Text> },
+        { key: 'nombre_proveedor', label: 'Proveedor', width: 180, cellRenderer: (v) => <Text style={styles.cellText}>{v || ''}</Text> }
     ];
 
     const ventasColumns = [
         { key: 'fecha', label: 'Fecha', width: 140, cellRenderer: (v) => <Text style={styles.cellText}>{v ? (new Date(v)).toLocaleDateString() : 'N/A'}</Text> },
         { key: 'cantidad', label: 'Cantidad', width: 100, cellRenderer: (v) => <Text style={styles.cellText}>{v ?? '0'}</Text> },
-        { key: 'precio_original_comerciable_cup', label: 'Precio Original CUP', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v || 'N/A'}</Text> },
-        { key: 'precio_cobrado_cup', label: 'Precio Cobrado', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v || 'N/A'}</Text> }
+        { key: 'precio_original_comerciable_cup', label: 'Precio Original CUP', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v || '0'}</Text> },
+        { key: 'precio_cobrado_cup', label: 'Precio Cobrado', width: 120, cellRenderer: (v) => <Text style={styles.cellText}>{v || '0'}</Text> }
     ];
 
     const entradasSummary = entradasList.reduce((acc, e) => {

@@ -838,7 +838,7 @@ export default function MedicamentosTab() {
                 )}
             </View>
 
-            <View style={[styles.actionsContainer, { marginTop: Spacing.s }]}>
+            {isAdmin && (<View style={[styles.actionsContainer, { marginTop: Spacing.s }]}>
                 <TouchableOpacity
                     style={styles.secondaryButton}
                     onPress={() => router.push('/addEntrada?tipo=medicamento')}
@@ -852,7 +852,7 @@ export default function MedicamentosTab() {
                 >
                     <Text style={styles.addButtonText}>+ Agregar Medicamento</Text>
                 </TouchableOpacity>
-            </View>
+            </View>)}
 
             {/* Botones de impresión */}
             <View style={[styles.actionsContainer, { marginTop: Spacing.s }]}>

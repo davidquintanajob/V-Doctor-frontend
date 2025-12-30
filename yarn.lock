@@ -2749,10 +2749,10 @@ expo-build-properties@^1.0.9:
     ajv "^8.11.0"
     semver "^7.6.0"
 
-expo-camera@^17.0.9:
-  version "17.0.9"
-  resolved "https://registry.yarnpkg.com/expo-camera/-/expo-camera-17.0.9.tgz#4447e63960c9b4485869e2f1fac0ef083c38669a"
-  integrity sha512-KgticPGurqEsaPBIwbG0T6mzAVnqZasDdM/6OoJt5zPh6tWB09+th6cBF1WafIBMPy8AWbfyUQSqQXqOrNJClg==
+expo-camera@~17.0.10:
+  version "17.0.10"
+  resolved "https://registry.yarnpkg.com/expo-camera/-/expo-camera-17.0.10.tgz#b3a217f0eb811a6e3522c2aff9f42be578aa6456"
+  integrity sha512-w1RBw83mAGVk4BPPwNrCZyFop0VLiVSRE3c2V9onWbdFwonpRhzmB4drygG8YOUTl1H3wQvALJHyMPTbgsK1Jg==
   dependencies:
     invariant "^2.2.4"
 
@@ -2786,6 +2786,13 @@ expo-image-loader@~6.0.0:
   resolved "https://registry.yarnpkg.com/expo-image-loader/-/expo-image-loader-6.0.0.tgz#15230442cbb90e101c080a4c81e37d974e43e072"
   integrity sha512-nKs/xnOGw6ACb4g26xceBD57FKLFkSwEUTDXEDF3Gtcu3MqF3ZIYd3YM+sSb1/z9AKV1dYT7rMSGVNgsveXLIQ==
 
+expo-image-manipulator@^14.0.8:
+  version "14.0.8"
+  resolved "https://registry.yarnpkg.com/expo-image-manipulator/-/expo-image-manipulator-14.0.8.tgz#1c457acbd2bcabe987fbd650c0f29120c3366ba6"
+  integrity sha512-sXsXjm7rIxLWZe0j2A41J/Ph53PpFJRdyzJ3EQ/qetxLUvS2m3K1sP5xy37px43qCf0l79N/i6XgFgenFV36/Q==
+  dependencies:
+    expo-image-loader "~6.0.0"
+
 expo-image-picker@^17.0.8:
   version "17.0.8"
   resolved "https://registry.yarnpkg.com/expo-image-picker/-/expo-image-picker-17.0.8.tgz#c4430994de81f3e9995c9ce77cb76403213b17d7"
@@ -2805,6 +2812,11 @@ expo-linking@^8.0.8:
   dependencies:
     expo-constants "~18.0.8"
     invariant "^2.2.4"
+
+expo-media-library@^18.2.1:
+  version "18.2.1"
+  resolved "https://registry.yarnpkg.com/expo-media-library/-/expo-media-library-18.2.1.tgz#22aac022cc3fabfc3e004e3f3f031c7b2cd355d8"
+  integrity sha512-dV1acx6Aseu+I5hmF61wY8UkD4vdt8d7YXHDfgNp6ZSs06qxayUxgrBsiG2eigLe54VLm3ycbFBbWi31lhfsCA==
 
 expo-modules-autolinking@3.0.21:
   version "3.0.21"

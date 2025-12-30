@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image, TextInput } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert, Image, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Colors, Spacing, Typography } from '../variables';
@@ -10,9 +10,9 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
     const [local, setLocal] = useState({});
     const [apiHost, setApiHost] = useState('');
     const [storageUser, setStorageUser] = useState(null);
-    const [logoUri, setLogoUri] = useState(null);
     const [customTotal, setCustomTotal] = useState(''); // Nuevo estado para el total editable
     const [ventaNotas, setVentaNotas] = useState({}); // Estado para notas de ventas
+    const [descuentoPaciente, setDescuentoPaciente] = useState(0); // Estado para el descuento del paciente
 
     useEffect(() => {
         const c = consulta || {};
@@ -25,10 +25,18 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             observaciones: c.observaciones || ''
         });
 
-        // Calcular y establecer el total inicial
+        // Obtener descuento del paciente
+        const descuento = c.paciente?.descuento || paciente?.descuento || 0;
+        setDescuentoPaciente(descuento);
+
+        // Calcular y establecer el total inicial CON descuento aplicado
         const ventas = Array.isArray(c.venta) ? c.venta : [];
-        const calculatedTotal = ventas.reduce((s, it) => s + (Number(it.precio_cobrado_cup) || 0), 0);
-        setCustomTotal(calculatedTotal.toString());
+        const subtotal = ventas.reduce((s, it) => s + (Number(it.precio_cobrado_cup) || 0), 0);
+
+        // Aplicar descuento
+        const totalConDescuento = descuento > 0 ? subtotal * (1 - descuento / 100) : subtotal;
+
+        setCustomTotal(totalConDescuento.toString());
 
         // Inicializar notas de ventas
         const notasIniciales = {};
@@ -37,7 +45,7 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             notasIniciales[key] = v.nota || ''; // Si ya existe nota en los datos, se inicializa
         });
         setVentaNotas(notasIniciales);
-    }, [consulta, isOpen]);
+    }, [consulta, isOpen, paciente]);
 
     // load AsyncStorage config (api host and user) and resolve logo asset URI
     useEffect(() => {
@@ -55,13 +63,6 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             } catch (e) {
                 // ignore
             }
-
-            try {
-                const resolved = RNImage.resolveAssetSource(require('../assets/images/logo(con_borde_blanco).png'));
-                if (mounted && resolved && resolved.uri) setLogoUri(resolved.uri);
-            } catch (e) {
-                // asset may not exist
-            }
         })();
         return () => { mounted = false; };
     }, [isOpen]);
@@ -73,119 +74,133 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
         const pacienteNum = consulta.paciente?.numero_clinico ?? paciente.numero_clinico ?? '';
         const userName = (storageUser && (storageUser.nombre || storageUser.nombre_natural || storageUser.user?.nombre)) || '';
         const userId = (storageUser && (storageUser.id_usuario || storageUser.id_user || storageUser.id)) || '';
+
+        // Construir URL para la firma
         const firmaUrl = apiHost ? apiHost.replace(/\/+$/, '') + '/fotos/usuariofirma/' + userId + '.jpg' : '';
-        const logo = logoUri || '';
+
+        // Construir URL para el logo desde la API
+        const logoUrl = apiHost ? apiHost.replace(/\/+$/, '') + '/fotos/logo.png' : '';
 
         const ventas = Array.isArray(consulta.venta) ? consulta.venta : [];
-        // Usar el total personalizado si existe, de lo contrario calcularlo
-        const total = customTotal ? parseFloat(customTotal) || 0 : ventas.reduce((s, it) => s + (Number(it.precio_cobrado_cup) || 0), 0);
+
+        // Obtener descuento del paciente
+        const descuento = descuentoPaciente || paciente?.descuento || consulta?.paciente?.descuento || 0;
+
+        // Calcular subtotal (sin descuento)
+        const subtotal = ventas.reduce((s, it) => s + (Number(it.precio_cobrado_cup) || 0), 0);
+
+        // Aplicar descuento al subtotal
+        const totalConDescuento = descuento > 0 ? subtotal * (1 - descuento / 100) : subtotal;
+
+        // Usar el total personalizado si existe, de lo contrario usar el total con descuento aplicado
+        const total = customTotal ? parseFloat(customTotal) || 0 : totalConDescuento;
 
         return `
-        <!doctype html>
-        <html>
-        <head>
-            <meta charset="utf-8" />
-            <meta name="viewport" content="width=device-width, initial-scale=1" />
-            <style>
-                @page { margin: 10px; }
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-size: 25px; color: #222; margin: 0; padding: 0; }
-                .container { width: 100%; box-sizing: border-box; padding: 17px; }
-                .top-section { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
-                .left-header { display: flex; align-items: center; flex: 1; }
-                .logo { max-width: 180px; height: auto; filter: grayscale(100%); margin-right: 17px; }
-                .doctor-info { flex: 1; }
-                .doctor-label { font-size: 22px; color: #666; }
-                .doctor-name { font-weight: 700; font-size: 25px; color: #222; }
-                .date-container { text-align: right; font-size: 24px; color: #444; }
-                .hr { border-top: 1px solid #ccc; margin: 13px 0; }
-                .patient-info { margin-top: 8px; }
-                .patient-info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
-                .patient-label { font-weight: 600; color: #444; }
-                .patient-value { font-weight: 700; color: #222; }
-                .patient-value-clinic { font-weight: 900; color: #000; font-size: 27px; }
-                .clinical-info { margin-top: 17px; }
-                .clinical-section { margin-bottom: 13px; }
-                .clinical-label { font-weight: 700; color: #333; font-size: 24px; margin-bottom: 4px; display: block; }
-                .clinical-value { color: #222; font-size: 25px; line-height: 1.3; padding-left: 8px; border-left: 3px solid #ccc; }
-                .sales-section { margin-top: 17px; }
-                .sales-header { font-weight: 700; font-size: 25px; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 3px; }
-                .sales-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; }
-                .sales-item:last-child { border-bottom: none; }
-                .item-name { flex: 2; }
-                .item-qty { flex: 1; text-align: center; }
-                .item-nota { flex: 1; text-align: center; font-size: 22px; color: #666; font-style: italic; }
-                .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; padding-top: 8px; border-top: 2px solid #333; font-size: 27px; }
-                .signature-section { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 13px; border-top: 1px solid #ccc; }
-                .firma { width: 126px; height: auto; filter: grayscale(100%); }
-                .sales-header { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    padding: 6px 0; 
-    margin-bottom: 8px; 
-    border-bottom: 2px solid #333; 
-    font-weight: 700; 
-    font-size: 25px; 
-}
-.header-name { 
-    flex: 2; 
-    text-align: left; 
-}
-.header-qty { 
-    flex: 1; 
-    text-align: center; 
-}
-.header-nota { 
-    flex: 1; 
-    text-align: center; 
-}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="top-section">
-                    <div class="left-header">
-                        ${logo ? `<img class="logo" src="${logo}" alt="Logo" />` : ''}
-                        <div class="doctor-info">
-                            <div class="doctor-label">Especialista:</div>
-                            <div class="doctor-name">${escapeHtml(userName)}</div>
-                        </div>
-                    </div>
-                    <div class="date-container">${escapeHtml(local.fecha || '')}</div>
-                </div>
-
-                <div class="hr"></div>
-
-                <div class="patient-info">
-                    <div class="patient-info-row">
-                        <span class="patient-label">Paciente:</span>
-                        <span class="patient-value">${escapeHtml(pacienteNombre)}</span>
-                    </div>
-                    <div class="patient-info-row">
-                        <span class="patient-label">Especie:</span>
-                        <span class="patient-value">${escapeHtml(pacienteEspecie)}</span>
-                    </div>
-                    <div class="patient-info-row">
-                        <span class="patient-label">Número Clínico:</span>
-                        <span class="patient-value-clinic">${escapeHtml(String(pacienteNum))}</span>
+    <!doctype html>
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+            @page { margin: 10px; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-size: 25px; color: #222; margin: 0; padding: 0; }
+            .container { width: 100%; box-sizing: border-box; padding: 17px; }
+            .top-section { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+            .left-header { display: flex; align-items: center; flex: 1; }
+            .logo { max-width: 180px; height: auto; filter: grayscale(100%); margin-right: 17px; }
+            .doctor-info { flex: 1; }
+            .doctor-label { font-size: 22px; color: #666; }
+            .doctor-name { font-weight: 700; font-size: 25px; color: #222; }
+            .date-container { text-align: right; font-size: 24px; color: #444; }
+            .hr { border-top: 1px solid #ccc; margin: 13px 0; }
+            .patient-info { margin-top: 8px; }
+            .patient-info-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+            .patient-label { font-weight: 600; color: #444; }
+            .patient-value { font-weight: 700; color: #222; }
+            .patient-value-clinic { font-weight: 900; color: #000; font-size: 27px; }
+            .clinical-info { margin-top: 17px; }
+            .clinical-section { margin-bottom: 13px; }
+            .clinical-label { font-weight: 700; color: #333; font-size: 24px; margin-bottom: 4px; display: block; }
+            .clinical-value { color: #222; font-size: 25px; line-height: 1.3; padding-left: 8px; border-left: 3px solid #ccc; }
+            .sales-section { margin-top: 17px; }
+            .sales-header { font-weight: 700; font-size: 25px; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 3px; }
+            .sales-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #eee; }
+            .sales-item:last-child { border-bottom: none; }
+            .item-name { flex: 2; }
+            .item-qty { flex: 1; text-align: center; }
+            .item-nota { flex: 1; text-align: center; font-size: 22px; color: #666; font-style: italic; }
+            .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; padding-top: 8px; border-top: 2px solid #333; font-size: 27px; }
+            .signature-section { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 13px; border-top: 1px solid #ccc; }
+            .firma { width: 126px; height: auto; filter: grayscale(100%); }
+            .sales-header { 
+                display: flex; 
+                justify-content: space-between; 
+                align-items: center; 
+                padding: 6px 0; 
+                margin-bottom: 8px; 
+                border-bottom: 2px solid #333; 
+                font-weight: 700; 
+                font-size: 25px; 
+            }
+            .header-name { 
+                flex: 2; 
+                text-align: left; 
+            }
+            .header-qty { 
+                flex: 1; 
+                text-align: center; 
+            }
+            .header-nota { 
+                flex: 1; 
+                text-align: center; 
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="top-section">
+                <div class="left-header">
+                    ${logoUrl ? `<img class="logo" src="${logoUrl}" alt="Logo" />` : ''}
+                    <div class="doctor-info">
+                        <div class="doctor-label">Especialista:</div>
+                        <div class="doctor-name">${escapeHtml(userName)}</div>
                     </div>
                 </div>
+                <div class="date-container">${escapeHtml(local.fecha || '')}</div>
+            </div>
 
-                <div class="clinical-info">
-                    ${local.motivo ? `<div class="clinical-section"><span class="clinical-label">Motivo de la consulta:</span><div class="clinical-value">${escapeHtml(local.motivo)}</div></div>` : ''}
-                    ${local.diagnostico ? `<div class="clinical-section"><span class="clinical-label">Diagnóstico:</span><div class="clinical-value">${escapeHtml(local.diagnostico)}</div></div>` : ''}
-                    ${local.tratamiento ? `<div class="clinical-section"><span class="clinical-label">Tratamiento:</span><div class="clinical-value">${escapeHtml(local.tratamiento)}</div></div>` : ''}
+            <div class="hr"></div>
+
+            <div class="patient-info">
+                <div class="patient-info-row">
+                    <span class="patient-label">Paciente:</span>
+                    <span class="patient-value">${escapeHtml(pacienteNombre)}</span>
                 </div>
+                <div class="patient-info-row">
+                    <span class="patient-label">Especie:</span>
+                    <span class="patient-value">${escapeHtml(pacienteEspecie)}</span>
+                </div>
+                <div class="patient-info-row">
+                    <span class="patient-label">Número Clínico:</span>
+                    <span class="patient-value-clinic">${escapeHtml(String(pacienteNum))}</span>
+                </div>
+            </div>
 
-                <div class="hr"></div>
+            <div class="clinical-info">
+                ${local.motivo ? `<div class="clinical-section"><span class="clinical-label">Motivo de la consulta:</span><div class="clinical-value">${escapeHtml(local.motivo)}</div></div>` : ''}
+                ${local.diagnostico ? `<div class="clinical-section"><span class="clinical-label">Diagnóstico:</span><div class="clinical-value">${escapeHtml(local.diagnostico)}</div></div>` : ''}
+                ${local.tratamiento ? `<div class="clinical-section"><span class="clinical-label">Tratamiento:</span><div class="clinical-value">${escapeHtml(local.tratamiento)}</div></div>` : ''}
+            </div>
 
-                <div class="sales-header">
-    <div class="header-name">Nombre</div>
-    <div class="header-qty">Cantidad</div>
-    <div class="header-nota">Nota</div>
-</div>
-                <div class="sales-section">
-                    ${ventas.map((v, index) => {
+            <div class="hr"></div>
+
+            <div class="sales-header">
+                <div class="header-name">Nombre</div>
+                <div class="header-qty">Cantidad</div>
+                <div class="header-nota">Nota</div>
+            </div>
+            <div class="sales-section">
+                ${ventas.map((v, index) => {
             const comp = v.comerciable || {};
             const prod = comp.producto;
             const serv = comp.servicio;
@@ -193,22 +208,22 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             const key = v.id_venta ?? index;
             const nota = ventaNotas[key] || '';
             return `<div class="sales-item">
-                            <div class="item-name">${escapeHtml(label)}</div>
-                            <div class="item-qty">${escapeHtml(String(v.cantidad || '1'))}</div>
-                            <div class="item-nota">${escapeHtml(nota)}</div>
-                        </div>`;
+                        <div class="item-name">${escapeHtml(label)}</div>
+                        <div class="item-qty">${escapeHtml(String(v.cantidad || '1'))}</div>
+                        <div class="item-nota">${escapeHtml(nota)}</div>
+                    </div>`;
         }).join('')}
-                    
-                    <div class="total-row">
-                        <span>TOTAL:</span>
-                        <span><strong>$ ${parseFloat(total).toFixed(2)}</strong></span>
-                    </div>
+                
+                <div class="total-row">
+                    <span>TOTAL:</span>
+                    <span><strong>$ ${parseFloat(total).toFixed(2)}</strong></span>
                 </div>
-
-                ${firmaUrl ? `<div class="signature-section"><div class="total">Firma del especialista:</div><div><img class="firma" src="${firmaUrl}" alt="Firma" /></div></div>` : ''}
             </div>
-        </body>
-        </html>
+
+            ${firmaUrl ? `<div class="signature-section"><div class="total">Firma del especialista:</div><div><img class="firma" src="${firmaUrl}" alt="Firma" /></div></div>` : ''}
+        </div>
+    </body>
+    </html>
     `;
     };
 
@@ -255,7 +270,11 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
 
     return (
         <Modal visible={!!isOpen} animationType="slide" onRequestClose={onClose} transparent>
-            <View style={styles.container}>
+            <KeyboardAvoidingView
+                style={styles.container}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 60}
+            >
                 <View style={styles.modalBox}>
                     <View style={styles.headerRowModal}>
                         <Text style={styles.headerTitle}>Vista impresión</Text>
@@ -302,6 +321,11 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
                             <Text style={styles.patientText}>Raza: {consulta.paciente?.raza || paciente.raza || '-'}</Text>
                             <Text style={styles.patientText}>Especie: {consulta.paciente?.especie || paciente.especie || '-'}</Text>
                             <Text style={styles.patientText}>Num: {consulta.paciente?.numero_clinico ?? paciente.numero_clinico ?? '-'}</Text>
+                            {descuentoPaciente > 0 && (
+                                <Text style={[styles.patientText, { color: '#e74c3c' }]}>
+                                    Descuento: {descuentoPaciente}%
+                                </Text>
+                            )}
                         </View>
 
                         <View style={styles.ventasBox}>
@@ -340,10 +364,16 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
                                 />
                                 <Text style={styles.totalCurrency}>CUP</Text>
                             </View>
+
+                            {descuentoPaciente > 0 && (
+                                <Text style={[styles.fieldValue, { color: '#e74c3c', marginTop: 8 }]}>
+                                    Nota: El paciente tiene un {descuentoPaciente}% de descuento aplicado
+                                </Text>
+                            )}
                         </View>
                     </ScrollView>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }

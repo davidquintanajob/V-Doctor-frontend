@@ -29,7 +29,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicioServicioComplejo', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true, enDesarrollo: true },
-    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], enDesarrollo: true },
+    { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'ventas', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], enDesarrollo: true },
     { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'productosMedicamentos', rolVisible: ["Administrador", "Médico", "Técnico"] },
     { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },

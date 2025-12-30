@@ -12,6 +12,8 @@ import {
     Alert,
     Image,
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TopBar from '../components/TopBar';
@@ -29,6 +31,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
+import * as ImageManipulator from 'expo-image-manipulator';
 import AutocompleteTextInput from '../components/AutocompleteTextInput';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -152,6 +155,47 @@ export default function HistoriaClinicaModalScreen() {
     const [totalVentasToCreate, setTotalVentasToCreate] = useState(0);
 
     // (List states removed)
+
+    // Función para comprimir imágenes sin pérdida de calidad visible
+    const comprimirImagen = async (uri) => {
+        try {
+            // Obtener información del archivo original
+            const fileInfo = await FileSystem.getInfoAsync(uri);
+            const sizeBefore = fileInfo.size;
+            console.log(`📸 Tamaño original: ${(sizeBefore / 1024 / 1024).toFixed(2)} MB (${sizeBefore} bytes)`);
+
+            // Comprimir imagen
+            const result = await ImageManipulator.manipulateAsync(
+                uri,
+                [
+                    // Mantener orientación original
+                    { resize: { width: 1024 } } // Redimensionar a ancho máximo de 1024px (mantiene relación de aspecto)
+                ],
+                {
+                    compress: 0.8, // Compresión del 80% (1 = sin compresión, 0 = máxima compresión)
+                    format: ImageManipulator.SaveFormat.JPEG,
+                    base64: true // Obtener directamente en base64
+                }
+            );
+
+            // Obtener información del archivo comprimido
+            const compressedFileInfo = await FileSystem.getInfoAsync(result.uri);
+            const sizeAfter = compressedFileInfo.size;
+
+            console.log(`✅ Tamaño comprimido: ${(sizeAfter / 1024 / 1024).toFixed(2)} MB (${sizeAfter} bytes)`);
+            console.log(`📊 Reducción: ${((1 - sizeAfter / sizeBefore) * 100).toFixed(1)}%`);
+
+            return {
+                uri: result.uri,
+                base64: result.base64,
+                width: result.width,
+                height: result.height
+            };
+        } catch (error) {
+            console.error('❌ Error en compresión de imagen:', error);
+            throw error;
+        }
+    };
 
     // Dentro del componente HistoriaClinicaModalScreen, agrega este useEffect:
     useEffect(() => {
@@ -1973,25 +2017,33 @@ export default function HistoriaClinicaModalScreen() {
                 return;
             }
             try {
-                // 3. Toma la foto usando la nueva API
+                console.log('📸 Iniciando captura de foto...');
+
+                // 1. Tomar la foto
                 const photo = await cameraRef.current.takePictureAsync({
-                    quality: 0.7,
-                    skipProcessing: true
+                    quality: 1, // Máxima calidad para el procesamiento
+                    skipProcessing: false,
+                    exif: true
                 });
 
-                const base64 = await uriToBase64(photo.uri);
-                if (base64) {
-                    setFotos(prev => [...prev, {
-                        uri: photo.uri,
-                        base64,
-                        nota: ''
-                    }]);
-                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
-                    setCameraModalVisible(false);
-                }
+                console.log('🔄 Comprimiendo imagen...');
+
+                // 2. Comprimir la imagen
+                const compressedResult = await comprimirImagen(photo.uri);
+
+                // 3. Agregar a la lista de fotos
+                setFotos(prev => [...prev, {
+                    uri: compressedResult.uri,
+                    base64: compressedResult.base64,
+                    nota: ''
+                }]);
+
+                ToastAndroid.show('✅ Foto agregada con compresión', ToastAndroid.SHORT);
+                setCameraModalVisible(false);
+
             } catch (err) {
-                console.error('Error tomando foto:', err);
-                Alert.alert('Error', 'No se pudo tomar la foto');
+                console.error('❌ Error tomando foto:', err);
+                Alert.alert('Error', 'No se pudo tomar la foto: ' + err.message);
             }
         };
 
@@ -2077,18 +2129,23 @@ export default function HistoriaClinicaModalScreen() {
 
         const handleSelect = async (asset) => {
             try {
-                const uri = asset.uri;
-                const base64 = await uriToBase64(uri);
-                if (base64) {
-                    const nuevaFoto = { uri, base64, nota: '' };
-                    setFotos(prev => [...prev, nuevaFoto]);
-                    ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
-                } else {
-                    Alert.alert('Error', 'No se pudo procesar la imagen');
-                }
+                console.log('🖼️ Procesando imagen de galería...');
+
+                // 1. Comprimir la imagen desde la galería
+                const compressedResult = await comprimirImagen(asset.uri);
+
+                // 2. Agregar a la lista de fotos
+                const nuevaFoto = {
+                    uri: compressedResult.uri,
+                    base64: compressedResult.base64,
+                    nota: ''
+                };
+                setFotos(prev => [...prev, nuevaFoto]);
+
+                ToastAndroid.show('✅ Foto agregada con compresión', ToastAndroid.SHORT);
             } catch (err) {
-                console.error('Error selecting asset', err);
-                Alert.alert('Error', 'No se pudo seleccionar la imagen');
+                console.error('❌ Error seleccionando imagen:', err);
+                Alert.alert('Error', 'No se pudo procesar la imagen: ' + err.message);
             } finally {
                 setGalleryModalVisible(false);
             }
@@ -2119,7 +2176,12 @@ export default function HistoriaClinicaModalScreen() {
     };
 
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 80}
+        >
+            <View style={styles.container}>
             <TopBar onMenuNavigate={() => { }} />
 
             {/* Modal para vista completa de imagen */}
@@ -2566,7 +2628,8 @@ export default function HistoriaClinicaModalScreen() {
                     </View>
                 )}
             </ScrollView>
-        </View>
+            </View>
+        </KeyboardAvoidingView>
     );
 }
 

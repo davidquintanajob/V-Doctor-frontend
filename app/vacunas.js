@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Image, TextInput, ScrollView, StyleSheet, ActivityIndicator, Alert, ToastAndroid, Modal } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PatientSidebarMenu from '../components/PatientSidebarMenu';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
@@ -53,7 +53,7 @@ export default function VacunasScreen() {
     }, [pacienteParam]);
 
     // función reutilizable para cargar vacunas (ventas filtradas)
-    const fetchVacunas = async () => {
+    const fetchVacunas = useCallback(async () => {
         if (!pacienteId) return;
         setLoadingVacunas(true);
         try {
@@ -106,11 +106,24 @@ export default function VacunasScreen() {
         } finally {
             setLoadingVacunas(false);
         }
-    };
+    }, [pacienteId]);
 
+    // Carga inicial
     useEffect(() => {
         fetchVacunas();
-    }, [pacienteId]);
+    }, [fetchVacunas]);
+
+    // Ejecutar cada vez que la pantalla reciba foco
+    useFocusEffect(
+        useCallback(() => {
+            fetchVacunas();
+            
+            // Opcional: Si necesitas limpieza al salir de la pantalla
+            return () => {
+                // Código de limpieza si es necesario
+            };
+        }, [fetchVacunas])
+    );
 
     const calculateAgeFromDate = (birthDate) => {
         const now = new Date();

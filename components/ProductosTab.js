@@ -841,20 +841,20 @@ export default function ProductosTab() {
                 )}
             </View>
 
-            <View style={styles.actionsContainer}>
+
+            {isAdmin && (<View style={styles.actionsContainer}>
                 <TouchableOpacity style={[styles.addButton, styles.secondaryButton]} onPress={() => {
                     router.push('/addEntrada?tipo=producto');
                 }}>
                     <Text style={styles.addButtonText}>Agregar Entrada a Producto</Text>
                 </TouchableOpacity>
 
-                {isAdmin && (<TouchableOpacity style={styles.addButton} onPress={() => {
+                <TouchableOpacity style={styles.addButton} onPress={() => {
                     router.push({ pathname: '/productoModal', params: { mode: 'crear' } });
                 }}>
                     <Text style={styles.addButtonText}>+ Agregar Producto</Text>
-                </TouchableOpacity>)}
-            </View>
-
+                </TouchableOpacity>
+            </View>)}
             {/* Botones de impresión */}
             <View style={[styles.actionsContainer, { marginTop: Spacing.s }]}>
                 <TouchableOpacity
