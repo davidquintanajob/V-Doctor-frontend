@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -220,6 +220,13 @@ export default function HistoriaClinicaModalScreen() {
         servicios: { totalCobrar: 0, totalProfit: 0 },
         usuarios: { totalCobrar: 0, totalProfit: 0 },
     });
+
+    // Totales originales (no editables directamente) y totales definidos por el usuario
+    const originalTotalsRef = useRef({ totalCobrar: 0, totalConDescuento: 0, version: 0 });
+    const [userTotals, setUserTotals] = useState({ totalCobrar: null, totalConDescuento: null, version: null });
+    const [totalsModalVisible, setTotalsModalVisible] = useState(false);
+
+    // NOTE: original totals are updated inside calculateTotals (no useEffect here)
 
     // Tipo de pago: 'efectivo' (default) | 'transferencia'
     const [paymentType, setPaymentType] = useState('efectivo');
@@ -1089,9 +1096,35 @@ export default function HistoriaClinicaModalScreen() {
             });
         }
 
+        const finalTotalCobrar = isNaN(totalCobrar) ? 0 : totalCobrar;
+        const finalTotalProfit = isNaN(totalProfit) ? 0 : Math.max(0, totalProfit);
+
+        // Calcular total con descuento y actualizar el ref de totales originales (sin setState)
+        const descuentoPaciente = (
+            consultaParam?.paciente?.descuento ??
+            consultaParam?.descuento ??
+            pacienteParam?.descuento ??
+            pacienteData?.descuento ??
+            0
+        );
+        const parsedDescuento = parseFloat(descuentoPaciente) || 0;
+        const totalConDescuento = finalTotalCobrar - (finalTotalCobrar * (parsedDescuento / 100));
+
+        try {
+            const prev = originalTotalsRef.current || { totalCobrar: 0, totalConDescuento: 0, version: 0 };
+            if (prev.totalCobrar !== finalTotalCobrar || prev.totalConDescuento !== totalConDescuento) {
+                originalTotalsRef.current = { totalCobrar: finalTotalCobrar, totalConDescuento, version: (prev.version || 0) + 1 };
+            } else {
+                // preserve version
+                originalTotalsRef.current = { ...prev, totalCobrar: finalTotalCobrar, totalConDescuento };
+            }
+        } catch (e) {
+            // no-op
+        }
+
         return {
-            totalCobrar: isNaN(totalCobrar) ? 0 : totalCobrar,
-            totalProfit: isNaN(totalProfit) ? 0 : Math.max(0, totalProfit)
+            totalCobrar: finalTotalCobrar,
+            totalProfit: finalTotalProfit
         };
     };
 
@@ -1530,7 +1563,7 @@ export default function HistoriaClinicaModalScreen() {
     // Función auxiliar para crear ventas de una lista específica
     const createVentasForList = async (cfgHost, cfgToken, id_consulta, itemsList, tipo, usuariosIds) => {
         if (!itemsList || itemsList.length === 0) return { ok: true, count: 0 };
-
+        
         setValidationTitle(`Creando ventas de ${tipo}...`);
         const total = itemsList.length;
         let done = 0;
@@ -1541,6 +1574,20 @@ export default function HistoriaClinicaModalScreen() {
 
             // Construir el payload según el tipo de venta
             let body;
+            let precioAux = 0;
+
+            const { totalCobrar, totalProfit } = calculateTotals();
+
+            //console.log("Supuesta cantidad del usuario: ",userTotals.totalCobrar);
+            //console.log("Total original: ",totalCobrar);
+            //console.log(`Resultado de esta venta referente ${entry.partePorcientoTotalSuma}% :`, (((entry.partePorcientoTotalSuma) * (userTotals.totalCobrar)) / 100) / (entry.cantidad));
+            //parseFloat(entry.precio_cup || 0) || 0
+
+            if (userTotals.totalCobrar === null) {
+                precioAux = parseFloat(entry.precio_cup || 0) || 0;
+            }else{
+                precioAux = ((entry.partePorcientoTotalSuma * userTotals.totalCobrar) / 100) / (entry.cantidad || 1);
+            }
 
             if (tipo === 'servicios') {
                 // Para servicios
@@ -1553,7 +1600,8 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: 0, // Los servicios no tienen costo de producto
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
-                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    descuento: pacienteParam.descuento || 0,
+                    precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_consulta: id_consulta,
                     id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
@@ -1571,7 +1619,8 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: parseFloat(producto.costo_cup || producto.costo_producto_cup || 0) || 0,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
-                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    descuento: pacienteParam.descuento || 0,
+                    precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_consulta: id_consulta,
                     id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
@@ -1589,7 +1638,8 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
-                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    descuento: pacienteParam.descuento || 0,
+                    precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_consulta: id_consulta,
                     id_comerciable: parseInt(comerciable.id_comerciable || comerciable.id || 0, 10) || 0,
@@ -1915,6 +1965,7 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: entry.costo_producto_cup,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
+                    descuento: pacienteParam.descuento || 0,
                     precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_comerciable: parseInt(entry.selected?.producto?.id_comerciable || entry.selected?.id_comerciable || 0, 10) || 0,
@@ -2130,6 +2181,111 @@ export default function HistoriaClinicaModalScreen() {
     };
 
     // List components removed
+
+    // Modal para editar totales (abre desde la sección Resumen de Totales)
+    const TotalsEditModal = () => {
+        const descuentoPaciente = (
+            consultaParam?.paciente?.descuento ??
+            consultaParam?.descuento ??
+            pacienteParam?.descuento ??
+            pacienteData?.descuento ??
+            0
+        );
+        const parsedDescuento = parseFloat(descuentoPaciente) || 0;
+
+        const [localTotalCobrar, setLocalTotalCobrar] = useState('');
+        const [localTotalConDescuento, setLocalTotalConDescuento] = useState('');
+        const [selectionCobrar, setSelectionCobrar] = useState(null);
+        const [selectionCon, setSelectionCon] = useState(null);
+
+        useEffect(() => {
+            if (!totalsModalVisible) return;
+            const orig = originalTotalsRef.current || { totalCobrar: 0, totalConDescuento: 0, version: 0 };
+            const useUser = (userTotals.version === orig.version) && (userTotals.totalCobrar !== null);
+            const initCobrar = useUser ? userTotals.totalCobrar : orig.totalCobrar;
+            const initCon = useUser ? userTotals.totalConDescuento : orig.totalConDescuento;
+            setLocalTotalCobrar(String(Number(initCobrar).toFixed(2)));
+            setLocalTotalConDescuento(String(Number(initCon).toFixed(2)));
+            setSelectionCobrar(null);
+            setSelectionCon(null);
+        }, [totalsModalVisible, userTotals]);
+
+        const onChangeCobrar = (text) => {
+            const val = parseFloat(text.replace(/,/g, '.')) || 0;
+            const con = val - (val * (parsedDescuento / 100));
+            setLocalTotalCobrar(text);
+            setLocalTotalConDescuento(String(Number(con).toFixed(2)));
+            setSelectionCobrar(null);
+        };
+
+        const onChangeCon = (text) => {
+            const val = parseFloat(text.replace(/,/g, '.')) || 0;
+            const denom = (1 - (parsedDescuento / 100));
+            const cobrar = denom !== 0 ? (val / denom) : val;
+            setLocalTotalConDescuento(text);
+            setLocalTotalCobrar(String(Number(cobrar).toFixed(2)));
+            setSelectionCon(null);
+        };
+
+        const onSave = () => {
+            const tc = parseFloat(localTotalCobrar.replace(/,/g, '.')) || 0;
+            const tcd = parseFloat(localTotalConDescuento.replace(/,/g, '.')) || 0;
+            const ver = (originalTotalsRef.current && originalTotalsRef.current.version) || 0;
+            setUserTotals({ totalCobrar: tc, totalConDescuento: tcd, version: ver });
+            setTotalsModalVisible(false);
+        };
+
+        const onReset = () => {
+            const orig = originalTotalsRef.current || { totalCobrar: 0, totalConDescuento: 0, version: 0 };
+            setUserTotals({ totalCobrar: orig.totalCobrar, totalConDescuento: orig.totalConDescuento, version: orig.version });
+            setLocalTotalCobrar(String(Number(orig.totalCobrar).toFixed(2)));
+            setLocalTotalConDescuento(String(Number(orig.totalConDescuento).toFixed(2)));
+        };
+
+        return (
+            <Modal visible={totalsModalVisible} transparent animationType="fade">
+                <View style={styles.loadingOverlay}>
+                    <View style={[styles.loadingBox, { width: 340 }]}>
+                        <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>Editar Totales</Text>
+                            <TouchableOpacity onPress={() => setTotalsModalVisible(false)} style={{ padding: 6 }}>
+                                <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.textSecondary }}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        <Text style={[styles.label, { marginTop: Spacing.s }]}>Total a cobrar (original: ${originalTotalsRef.current.totalCobrar.toFixed(2)})</Text>
+                        <TextInput
+                            style={[styles.input, { marginTop: Spacing.xs }]}
+                            keyboardType="numeric"
+                            value={localTotalCobrar}
+                            onChangeText={onChangeCobrar}
+                            onFocus={() => setSelectionCobrar({ start: 0, end: (localTotalCobrar || '').length })}
+                            selection={selectionCobrar}
+                        />
+
+                        <Text style={[styles.label, { marginTop: Spacing.s }]}>Total con descuento ({parsedDescuento}%):</Text>
+                        <TextInput
+                            style={[styles.input, { marginTop: Spacing.xs }]}
+                            keyboardType="numeric"
+                            value={localTotalConDescuento}
+                            onChangeText={onChangeCon}
+                            onFocus={() => setSelectionCon({ start: 0, end: (localTotalConDescuento || '').length })}
+                            selection={selectionCon}
+                        />
+
+                        <View style={{ flexDirection: 'row', gap: Spacing.s, marginTop: Spacing.m }}>
+                            <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: '#28a745' }]} onPress={onSave}>
+                                <Text style={styles.saveButtonText}>Guardar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: Colors.primary, marginLeft: Spacing.s }]} onPress={onReset}>
+                                <Text style={styles.saveButtonText}>Restablecer</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
     const CameraModal = () => {
         // 1. Usa el hook moderno para permisos
         const [permission, requestPermission] = useCameraPermissions();
@@ -2321,6 +2477,8 @@ export default function HistoriaClinicaModalScreen() {
                 <CameraModal />
                 {/* Modal para seleccionar desde galería */}
                 <GalleryModal />
+                {/* Modal para editar totales */}
+                <TotalsEditModal />
 
                 {/* Modal bloqueante mientras se cargan los usuarios */}
                 <Modal visible={usuariosLoading} transparent animationType="none">
@@ -2496,23 +2654,46 @@ export default function HistoriaClinicaModalScreen() {
                             <View style={styles.section}>
                                 <Text style={styles.label}>Resumen de Cobro</Text>
 
-                                <View style={styles.summaryRow}>
-                                    <Text style={styles.summaryLabel}>Total a cobrar:</Text>
-                                    <Text style={styles.summaryValue}>${totalCobrar.toFixed(2)}</Text>
-                                </View>
+                                {(() => {
+                                    const orig = originalTotalsRef.current || { totalCobrar: totalCobrar, totalConDescuento: totalConDescuento, version: 0 };
+                                    const useUser = (userTotals.version === orig.version) && (userTotals.totalCobrar !== null);
+                                    const displayTotalCobrar = useUser ? userTotals.totalCobrar : totalCobrar;
+                                    const displayTotalCon = useUser ? userTotals.totalConDescuento : totalConDescuento;
+                                    return (
+                                        <>
+                                            <TouchableOpacity style={styles.summaryRow} onPress={() => {(mode === "crear")? setTotalsModalVisible(true) : {}}}>
+                                                <Text style={styles.summaryLabel}>Total a cobrar:</Text>
+                                                <Text style={styles.summaryValue}>${Number(displayTotalCobrar).toFixed(2)}</Text>
+                                            </TouchableOpacity>
 
-                                <View style={styles.summaryRow}>
-                                    <View style={styles.summaryLabelContainer}>
-                                        <Text style={styles.summaryLabel}>Total con descuento </Text>
-                                        <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>
-                                        <Text style={styles.summaryLabel}>:</Text>
-                                    </View>
-                                    <Text style={styles.summaryValue}>${totalConDescuento.toFixed(2)}</Text>
-                                </View>
+                                            <TouchableOpacity style={styles.summaryRow} onPress={() => {(mode === "crear")? setTotalsModalVisible(true) : {}}}>
+                                                <View style={styles.summaryLabelContainer}>
+                                                    <Text style={styles.summaryLabel}>Total con descuento </Text>
+                                                    <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>
+                                                    <Text style={styles.summaryLabel}>:</Text>
+                                                </View>
+                                                <Text style={styles.summaryValue}>${Number(displayTotalCon).toFixed(2)}</Text>
+                                            </TouchableOpacity>
+                                        </>
+                                    );
+                                })()}
 
                                 <View style={styles.summaryRow}>
                                     <Text style={styles.summaryLabel}>Plus (Ganancia):</Text>
-                                    <Text style={styles.summaryValue}>${totalProfit.toFixed(2)}</Text>
+                                    {(() => {
+                                        const origRef = originalTotalsRef.current || { totalCobrar: totalCobrar, totalConDescuento: totalConDescuento, version: 0 };
+                                        const useUserNow = (userTotals.version === origRef.version) && (userTotals.totalCobrar !== null);
+                                        const userVal = useUserNow ? Number(userTotals.totalCobrar) : null;
+
+                                        let plusValue = Number(totalProfit);
+                                        if (useUserNow && userVal > Number(origRef.totalCobrar)) {
+                                            plusValue = userVal - Number(origRef.totalCobrar);
+                                        }
+
+                                        return (
+                                            <Text style={styles.summaryValue}>${Number(plusValue).toFixed(2)}</Text>
+                                        );
+                                    })()}
                                 </View>
 
                                 {/* Tipo de pago (radio buttons) */}
