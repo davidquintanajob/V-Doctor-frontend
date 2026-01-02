@@ -106,16 +106,50 @@ export default function HomeScreen() {
             const host = parsed.api_host || parsed.apihost || parsed.apiHost;
             const token = parsed.token;
             if (!host) return;
-            const res = await fetch(`${host}/moneda`, {
-              method: 'GET',
-              headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-            });
-            const data = await res.json();
-            if (data && typeof data.value !== 'undefined') {
-              await AsyncStorage.setItem('@CambioMoneda', String(data.value));
+
+            // Sincronizar /moneda
+            try {
+              const res = await fetch(`${host}/moneda`, {
+                method: 'GET',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+              });
+              const contentType = res.headers && res.headers.get ? (res.headers.get('content-type') || '') : '';
+              if (res.ok && contentType.includes('application/json')) {
+                const data = await res.json();
+                if (data && typeof data.value !== 'undefined') {
+                  await AsyncStorage.setItem('@CambioMoneda', String(data.value));
+                }
+              }
+            } catch (e) {
+              console.log('No se pudo sincronizar @CambioMoneda:', e);
             }
+
+            // Sincronizar /redondeo y guardar en @redondeoConfig
+            try {
+              const rres = await fetch(`${host}/redondeo`, {
+                method: 'GET',
+                headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+              });
+              const contentTypeR = rres.headers && rres.headers.get ? (rres.headers.get('content-type') || '') : '';
+              if (rres.ok && contentTypeR.includes('application/json')) {
+                const rdata = await rres.json();
+                // Guardar la respuesta tal cual en JSON string bajo @redondeoConfig
+                await AsyncStorage.setItem('@redondeoConfig', JSON.stringify(rdata));
+              } else if (rres.ok) {
+                // Si responde OK pero no JSON, intentar leer texto y guardarlo como value
+                try {
+                  const text = await rres.text();
+                  await AsyncStorage.setItem('@redondeoConfig', JSON.stringify({ raw: text }));
+                } catch (e) {
+                  console.log('No se pudo leer respuesta /redondeo como texto:', e);
+                }
+              }
+            } catch (e) {
+              console.log('No se pudo sincronizar @redondeoConfig:', e);
+            }
+
           } catch (e) {
-            console.log('No se pudo sincronizar @CambioMoneda:', e);
+            console.log('No se pudo sincronizar @CambioMoneda y @redondeoConfig:', e);
           }
         })();
       } catch (e) {

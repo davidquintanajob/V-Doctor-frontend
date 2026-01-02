@@ -1022,25 +1022,57 @@ export default function HistoriaClinicaModalScreen() {
     const calculateTotals = () => {
         let totalCobrar = 0;
         let totalProfit = 0;
+        const allSelectedItems = [];
 
         const refs = [vacunasListRef, antiparasitariosListRef, medicamentosListRef, productosListRef, serviciosListRef];
 
         refs.forEach(r => {
             try {
+                // Caso 1: Si tiene getTotals, usar ese método para totales generales
                 if (r.current?.getTotals && typeof r.current.getTotals === 'function') {
                     const t = r.current.getTotals();
                     totalCobrar += parseFloat(t.totalCobrar || 0) || 0;
                     totalProfit += parseFloat(t.totalProfit || 0) || 0;
-                } else if (r.current?.items) {
-                    // Fallback: calcular desde items si getTotals no está disponible
+
+                    // También recopilar items individuales para calcular porcentajes
+                    if (r.current?.items) {
+                        r.current.items.forEach(item => {
+                            if (item.selected) {
+                                const price = parseFloat(item.precio_cup || 0) || 0;
+                                const qty = parseFloat(item.cantidad || 0) || 0;
+                                const itemTotal = price * qty;
+
+                                // Guardar referencia al item y su total para cálculo de porcentajes
+                                allSelectedItems.push({
+                                    item: item,
+                                    itemTotal: itemTotal
+                                });
+                            }
+                        });
+                    }
+                }
+                // Caso 2: Si no tiene getTotals pero tiene items
+                else if (r.current?.items) {
                     r.current.items.forEach(item => {
                         if (item.selected) {
                             const price = parseFloat(item.precio_cup || 0) || 0;
                             const qty = parseFloat(item.cantidad || 0) || 0;
-                            // intentar diferentes campos de costo
-                            const cost = parseFloat(item.selected.producto?.comerciable?.precio_cup || item.selected.costo_cup || 0) || 0;
-                            totalCobrar += price * qty;
-                            totalProfit += (price * qty) - (cost * qty);
+                            const cost = parseFloat(
+                                item.selected.producto?.comerciable?.precio_cup ||
+                                item.selected.costo_cup ||
+                                item.costo_producto_cup ||
+                                0
+                            ) || 0;
+                            const itemTotal = price * qty;
+
+                            totalCobrar += itemTotal;
+                            totalProfit += (itemTotal) - (cost * qty);
+
+                            // Guardar referencia al item y su total
+                            allSelectedItems.push({
+                                item: item,
+                                itemTotal: itemTotal
+                            });
                         }
                     });
                 }
@@ -1048,6 +1080,14 @@ export default function HistoriaClinicaModalScreen() {
                 console.error('Error calculando totales desde ref:', err);
             }
         });
+        
+        // Calcular y asignar porcentajes a todos los items seleccionados
+        if (totalCobrar > 0) {
+            allSelectedItems.forEach(({ item, itemTotal }) => {
+                const porcentaje = (itemTotal / totalCobrar) * 100;
+                item.partePorcientoTotalSuma = parseFloat(porcentaje);
+            });
+        }
 
         return {
             totalCobrar: isNaN(totalCobrar) ? 0 : totalCobrar,
@@ -1541,7 +1581,7 @@ export default function HistoriaClinicaModalScreen() {
                 // Para medicamentos, vacunas y antiparasitarios
                 const producto = sel.producto || {};
                 const comerciable = producto.comerciable || {};
-    
+
                 body = {
                     fecha: new Date(consultaData.fecha).toISOString(),
                     precio_original_comerciable_cup: parseFloat(comerciable.precio_cup || 0) || 0,
@@ -2273,452 +2313,452 @@ export default function HistoriaClinicaModalScreen() {
             keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 80}
         >
             <View style={styles.container}>
-            <TopBar onMenuNavigate={() => { }} />
+                <TopBar onMenuNavigate={() => { }} />
 
-            {/* Modal para vista completa de imagen */}
-            <FullscreenImageModal />
-            {/* Modal para tomar foto */}
-            <CameraModal />
-            {/* Modal para seleccionar desde galería */}
-            <GalleryModal />
+                {/* Modal para vista completa de imagen */}
+                <FullscreenImageModal />
+                {/* Modal para tomar foto */}
+                <CameraModal />
+                {/* Modal para seleccionar desde galería */}
+                <GalleryModal />
 
-            {/* Modal bloqueante mientras se cargan los usuarios */}
-            <Modal visible={usuariosLoading} transparent animationType="none">
-                <View style={styles.loadingOverlay}>
-                    <View style={styles.loadingBox}>
-                        <ActivityIndicator size="large" color={Colors.primary} />
-                        <Text style={styles.loadingText}>Cargando usuarios...</Text>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* Modal de validación/progreso durante creación/edición */}
-            <Modal visible={validationVisible} transparent animationType="fade">
-                <View style={styles.loadingOverlay}>
-                    <View style={[styles.loadingBox, { width: 300 }]}>
-                        <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>{validationTitle}</Text>
-
-                        {totalVentasToCreate > 0 && (
-                            <Text style={[styles.loadingText, { marginBottom: Spacing.s }]}>
-                                {ventasCreated} de {totalVentasToCreate} ventas creadas
-                            </Text>
-                        )}
-
-                        <View style={{ width: '100%', height: 12, backgroundColor: '#eee', borderRadius: 8, overflow: 'hidden' }}>
-                            <View style={{ width: `${validationProgress}%`, height: '100%', backgroundColor: Colors.primary }} />
+                {/* Modal bloqueante mientras se cargan los usuarios */}
+                <Modal visible={usuariosLoading} transparent animationType="none">
+                    <View style={styles.loadingOverlay}>
+                        <View style={styles.loadingBox}>
+                            <ActivityIndicator size="large" color={Colors.primary} />
+                            <Text style={styles.loadingText}>Cargando usuarios...</Text>
                         </View>
-                        <Text style={[styles.loadingText, { marginTop: Spacing.s }]}>{validationProgress}%</Text>
                     </View>
-                </View>
-            </Modal>
+                </Modal>
 
-            <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always">
-                {/* Header */}
-                <View style={styles.headerRow}>
-                    <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-                        <Image
-                            source={require('../assets/images/arrow-left.png')}
-                            style={styles.icon}
-                            resizeMode="contain"
-                        />
-                    </TouchableOpacity>
-                    <Text style={styles.sectionTitle}>
-                        {mode === 'crear' ? 'Nueva Consulta' : mode === 'editar' ? 'Editar Consulta' : 'Ver Consulta'}
-                    </Text>
-                </View>
+                {/* Modal de validación/progreso durante creación/edición */}
+                <Modal visible={validationVisible} transparent animationType="fade">
+                    <View style={styles.loadingOverlay}>
+                        <View style={[styles.loadingBox, { width: 300 }]}>
+                            <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>{validationTitle}</Text>
 
-                {/* Fecha */}
-                <View style={styles.section} onLayout={(e) => { positionsRef.current.fecha = e.nativeEvent.layout.y; }}>
-                    <Text style={styles.label}>Fecha *</Text>
-                    {isView ? (
-                        <Text style={[styles.input, styles.disabledInput]}>
-                            {consultaData.fecha}
+                            {totalVentasToCreate > 0 && (
+                                <Text style={[styles.loadingText, { marginBottom: Spacing.s }]}>
+                                    {ventasCreated} de {totalVentasToCreate} ventas creadas
+                                </Text>
+                            )}
+
+                            <View style={{ width: '100%', height: 12, backgroundColor: '#eee', borderRadius: 8, overflow: 'hidden' }}>
+                                <View style={{ width: `${validationProgress}%`, height: '100%', backgroundColor: Colors.primary }} />
+                            </View>
+                            <Text style={[styles.loadingText, { marginTop: Spacing.s }]}>{validationProgress}%</Text>
+                        </View>
+                    </View>
+                </Modal>
+
+                <ScrollView ref={scrollRef} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always">
+                    {/* Header */}
+                    <View style={styles.headerRow}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                            <Image
+                                source={require('../assets/images/arrow-left.png')}
+                                style={styles.icon}
+                                resizeMode="contain"
+                            />
+                        </TouchableOpacity>
+                        <Text style={styles.sectionTitle}>
+                            {mode === 'crear' ? 'Nueva Consulta' : mode === 'editar' ? 'Editar Consulta' : 'Ver Consulta'}
                         </Text>
-                    ) : (
-                        <TouchableOpacity
-                            style={[styles.input, styles.datePickerTouchable]}
-                            onPress={() => setShowDatePicker(true)}
-                            activeOpacity={0.7}
-                        >
-                            <Text style={{ color: Colors.textSecondary }}>
+                    </View>
+
+                    {/* Fecha */}
+                    <View style={styles.section} onLayout={(e) => { positionsRef.current.fecha = e.nativeEvent.layout.y; }}>
+                        <Text style={styles.label}>Fecha *</Text>
+                        {isView ? (
+                            <Text style={[styles.input, styles.disabledInput]}>
                                 {consultaData.fecha}
                             </Text>
-                        </TouchableOpacity>
-                    )}
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.input, styles.datePickerTouchable]}
+                                onPress={() => setShowDatePicker(true)}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={{ color: Colors.textSecondary }}>
+                                    {consultaData.fecha}
+                                </Text>
+                            </TouchableOpacity>
+                        )}
 
-                    {showDatePicker && (
-                        <DateTimePicker
-                            value={new Date(consultaData.fecha)}
-                            mode="date"
-                            display="default"
-                            maximumDate={new Date()}
-                            onChange={handleDateChange}
-                        />
-                    )}
-                </View>
-
-                {/* Motivo */}
-                <View style={styles.section} onLayout={(e) => { positionsRef.current.motivo = e.nativeEvent.layout.y; }}>
-                    <Text style={styles.label}>Motivo de la Visita *</Text>
-                    {isView ? (
-                        <Text style={[styles.input, styles.disabledInput]}>
-                            {consultaData.motivo}
-                        </Text>
-                    ) : (
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Ej: Revisión general, Vacunas, etc."
-                            value={consultaData.motivo}
-                            onChangeText={(value) => handleChange('motivo', value)}
-                            placeholderTextColor="#999"
-                            editable={isEditable}
-                        />
-                    )}
-                </View>
-
-                {/* Anamnesis */}
-                <View style={styles.section} onLayout={(e) => { positionsRef.current.anamnesis = e.nativeEvent.layout.y; }}>
-                    <View style={styles.sectionHeaderWithButton}>
-                        <Text style={styles.label}>Anamnesis *</Text>
-                        <AudioRecordButton field="anamnesis" label="Grabar" />
+                        {showDatePicker && (
+                            <DateTimePicker
+                                value={new Date(consultaData.fecha)}
+                                mode="date"
+                                display="default"
+                                maximumDate={new Date()}
+                                onChange={handleDateChange}
+                            />
+                        )}
                     </View>
 
-                    {isView ? (
-                        <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
-                            {consultaData.anamnesis || '-'}
-                        </Text>
-                    ) : (
-                        <AutocompleteTextInput
-                            style={[styles.input, styles.largeInput]}
-                            placeholder="Describe síntomas, historial y contexto clínico..."
-                            value={consultaData.anamnesis}
-                            onChangeText={(value) => handleChange('anamnesis', value)}
-                            placeholderTextColor="#999"
-                            multiline
-                            numberOfLines={6}
-                            editable={isEditable}
-                            textAlignVertical="top"
-                        />
-                    )}
-                </View>
+                    {/* Motivo */}
+                    <View style={styles.section} onLayout={(e) => { positionsRef.current.motivo = e.nativeEvent.layout.y; }}>
+                        <Text style={styles.label}>Motivo de la Visita *</Text>
+                        {isView ? (
+                            <Text style={[styles.input, styles.disabledInput]}>
+                                {consultaData.motivo}
+                            </Text>
+                        ) : (
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Ej: Revisión general, Vacunas, etc."
+                                value={consultaData.motivo}
+                                onChangeText={(value) => handleChange('motivo', value)}
+                                placeholderTextColor="#999"
+                                editable={isEditable}
+                            />
+                        )}
+                    </View>
 
-                {/* Lista de Vacunas */}
-                <MedicamentosLista
-                    ref={medicamentosListRef}
-                    isEditable={isEditable}
-                    initial={initialMedicamentos}
-                    onChange={(t) => setListsTotals(prev => ({ ...prev, medicamentos: t }))}
-                />
-                <ServiciosLista
-                    ref={serviciosListRef}
-                    isEditable={isEditable}
-                    initial={initialServicios}
-                    onChange={(t) => setListsTotals(prev => ({ ...prev, servicios: t }))}
-                />
-                <ProductosList
-                    ref={productosListRef}
-                    isEditable={isEditable}
-                    initial={initialProductos}
-                    onChange={(t) => setListsTotals(prev => ({ ...prev, productos: t }))}
-                />
-                <VacunasLista
-                    ref={vacunasListRef}
-                    isEditable={isEditable}
-                    initial={initialVacunas}
-                    onChange={(t) => setListsTotals(prev => ({ ...prev, vacunas: t }))}
-                />
-                <AntiparasitariosLista
-                    ref={antiparasitariosListRef}
-                    isEditable={isEditable}
-                    initial={initialAntiparasitarios}
-                    onChange={(t) => setListsTotals(prev => ({ ...prev, antiparasitarios: t }))}
-                />
-
-                {/* Contenedor de Resumen de Totales */}
-                {(() => {
-                    // Usar totales calculados directamente desde los refs de las listas
-                    // Esto evita inconsistencias al cargar datos iniciales (modo ver/editar)
-                    const { totalCobrar, totalProfit } = calculateTotals();
-
-                    // Determinar descuento del paciente buscando en distintos lugares según cómo se abrió el modal
-                    const descuentoPaciente = (
-                        consultaParam?.paciente?.descuento ??
-                        consultaParam?.descuento ??
-                        pacienteParam?.descuento ??
-                        pacienteData?.descuento ??
-                        0
-                    );
-
-                    const parsedDescuento = parseFloat(descuentoPaciente) || 0;
-                    const totalConDescuento = totalCobrar - (totalCobrar * (parsedDescuento / 100));
-
-                    return (
-                        <View style={styles.section}>
-                            <Text style={styles.label}>Resumen de Cobro</Text>
-
-                            <View style={styles.summaryRow}>
-                                <Text style={styles.summaryLabel}>Total a cobrar:</Text>
-                                <Text style={styles.summaryValue}>${totalCobrar.toFixed(2)}</Text>
-                            </View>
-
-                            <View style={styles.summaryRow}>
-                                <View style={styles.summaryLabelContainer}>
-                                    <Text style={styles.summaryLabel}>Total con descuento </Text>
-                                    <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>
-                                    <Text style={styles.summaryLabel}>:</Text>
-                                </View>
-                                <Text style={styles.summaryValue}>${totalConDescuento.toFixed(2)}</Text>
-                            </View>
-
-                            <View style={styles.summaryRow}>
-                                <Text style={styles.summaryLabel}>Plus (Ganancia):</Text>
-                                <Text style={styles.summaryValue}>${totalProfit.toFixed(2)}</Text>
-                            </View>
-
-                            {/* Tipo de pago (radio buttons) */}
-                            <View style={styles.paymentContainer}>
-                                <Text style={[styles.label, { marginBottom: 8 }]}>Tipo de pago</Text>
-                                <View style={styles.radioRow}>
-                                    <TouchableOpacity
-                                        style={styles.radioOption}
-                                        onPress={() => setPaymentType('efectivo')}
-                                        disabled={!isEditable}
-                                    >
-                                        <View style={styles.radioCircle}>
-                                            {paymentType === 'efectivo' && <View style={styles.radioInner} />}
-                                        </View>
-                                        <Text style={styles.radioLabel}>Efectivo</Text>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity
-                                        style={styles.radioOption}
-                                        onPress={() => setPaymentType('transferencia')}
-                                        disabled={!isEditable}
-                                    >
-                                        <View style={styles.radioCircle}>
-                                            {paymentType === 'transferencia' && <View style={styles.radioInner} />}
-                                        </View>
-                                        <Text style={styles.radioLabel}>Transferencia</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
+                    {/* Anamnesis */}
+                    <View style={styles.section} onLayout={(e) => { positionsRef.current.anamnesis = e.nativeEvent.layout.y; }}>
+                        <View style={styles.sectionHeaderWithButton}>
+                            <Text style={styles.label}>Anamnesis *</Text>
+                            <AudioRecordButton field="anamnesis" label="Grabar" />
                         </View>
-                    );
-                })()}
-                <View onLayout={(e) => { positionsRef.current.usuarios = e.nativeEvent.layout.y; }}>
-                    <UsuariosLista
-                        ref={usuariosListRef}
-                        data={usuariosDisponibles}
-                        initialSelected={usuariosPreseleccionados}
+
+                        {isView ? (
+                            <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
+                                {consultaData.anamnesis || '-'}
+                            </Text>
+                        ) : (
+                            <AutocompleteTextInput
+                                style={[styles.input, styles.largeInput]}
+                                placeholder="Describe síntomas, historial y contexto clínico..."
+                                value={consultaData.anamnesis}
+                                onChangeText={(value) => handleChange('anamnesis', value)}
+                                placeholderTextColor="#999"
+                                multiline
+                                numberOfLines={6}
+                                editable={isEditable}
+                                textAlignVertical="top"
+                            />
+                        )}
+                    </View>
+
+                    {/* Lista de Vacunas */}
+                    <MedicamentosLista
+                        ref={medicamentosListRef}
                         isEditable={isEditable}
-                        onChange={(t) => setListsTotals(prev => ({ ...prev, usuarios: t }))}
+                        initial={initialMedicamentos}
+                        onChange={(t) => setListsTotals(prev => ({ ...prev, medicamentos: t }))}
                     />
-                </View>
+                    <ServiciosLista
+                        ref={serviciosListRef}
+                        isEditable={isEditable}
+                        initial={initialServicios}
+                        onChange={(t) => setListsTotals(prev => ({ ...prev, servicios: t }))}
+                    />
+                    <ProductosList
+                        ref={productosListRef}
+                        isEditable={isEditable}
+                        initial={initialProductos}
+                        onChange={(t) => setListsTotals(prev => ({ ...prev, productos: t }))}
+                    />
+                    <VacunasLista
+                        ref={vacunasListRef}
+                        isEditable={isEditable}
+                        initial={initialVacunas}
+                        onChange={(t) => setListsTotals(prev => ({ ...prev, vacunas: t }))}
+                    />
+                    <AntiparasitariosLista
+                        ref={antiparasitariosListRef}
+                        isEditable={isEditable}
+                        initial={initialAntiparasitarios}
+                        onChange={(t) => setListsTotals(prev => ({ ...prev, antiparasitarios: t }))}
+                    />
 
-                {/* List sections removed */}
+                    {/* Contenedor de Resumen de Totales */}
+                    {(() => {
+                        // Usar totales calculados directamente desde los refs de las listas
+                        // Esto evita inconsistencias al cargar datos iniciales (modo ver/editar)
+                        const { totalCobrar, totalProfit } = calculateTotals();
 
-                {/* Fotos Consulta - Galería */}
-                <View style={styles.section}>
-                    <View style={styles.fotosHeader}>
-                        <Text style={styles.label}>Imágenes de la Consulta</Text>
-                        <View style={{ flexDirection: 'row', gap: Spacing.s }}>
-                            {(mode === "crear") && (
-                                <>
-                                    <TouchableOpacity onPress={openCamera} style={[styles.eyeButton, styles.photoAddButton]}>
-                                        <Image
-                                            source={require('../assets/images/camera.png')}
-                                            style={styles.photoIcon}
-                                            resizeMode="contain"
-                                        />
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={openGallery} style={[styles.eyeButton, styles.photoAddButton]}>
-                                        <Image
-                                            source={require('../assets/images/galeria-de-imagenes.png')}
-                                            style={styles.photoIcon}
-                                            resizeMode="contain"
-                                        />
-                                    </TouchableOpacity>
-                                </>
-                            )}
-                        </View>
+                        // Determinar descuento del paciente buscando en distintos lugares según cómo se abrió el modal
+                        const descuentoPaciente = (
+                            consultaParam?.paciente?.descuento ??
+                            consultaParam?.descuento ??
+                            pacienteParam?.descuento ??
+                            pacienteData?.descuento ??
+                            0
+                        );
+
+                        const parsedDescuento = parseFloat(descuentoPaciente) || 0;
+                        const totalConDescuento = totalCobrar - (totalCobrar * (parsedDescuento / 100));
+
+                        return (
+                            <View style={styles.section}>
+                                <Text style={styles.label}>Resumen de Cobro</Text>
+
+                                <View style={styles.summaryRow}>
+                                    <Text style={styles.summaryLabel}>Total a cobrar:</Text>
+                                    <Text style={styles.summaryValue}>${totalCobrar.toFixed(2)}</Text>
+                                </View>
+
+                                <View style={styles.summaryRow}>
+                                    <View style={styles.summaryLabelContainer}>
+                                        <Text style={styles.summaryLabel}>Total con descuento </Text>
+                                        <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>
+                                        <Text style={styles.summaryLabel}>:</Text>
+                                    </View>
+                                    <Text style={styles.summaryValue}>${totalConDescuento.toFixed(2)}</Text>
+                                </View>
+
+                                <View style={styles.summaryRow}>
+                                    <Text style={styles.summaryLabel}>Plus (Ganancia):</Text>
+                                    <Text style={styles.summaryValue}>${totalProfit.toFixed(2)}</Text>
+                                </View>
+
+                                {/* Tipo de pago (radio buttons) */}
+                                <View style={styles.paymentContainer}>
+                                    <Text style={[styles.label, { marginBottom: 8 }]}>Tipo de pago</Text>
+                                    <View style={styles.radioRow}>
+                                        <TouchableOpacity
+                                            style={styles.radioOption}
+                                            onPress={() => setPaymentType('efectivo')}
+                                            disabled={!isEditable}
+                                        >
+                                            <View style={styles.radioCircle}>
+                                                {paymentType === 'efectivo' && <View style={styles.radioInner} />}
+                                            </View>
+                                            <Text style={styles.radioLabel}>Efectivo</Text>
+                                        </TouchableOpacity>
+
+                                        <TouchableOpacity
+                                            style={styles.radioOption}
+                                            onPress={() => setPaymentType('transferencia')}
+                                            disabled={!isEditable}
+                                        >
+                                            <View style={styles.radioCircle}>
+                                                {paymentType === 'transferencia' && <View style={styles.radioInner} />}
+                                            </View>
+                                            <Text style={styles.radioLabel}>Transferencia</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        );
+                    })()}
+                    <View onLayout={(e) => { positionsRef.current.usuarios = e.nativeEvent.layout.y; }}>
+                        <UsuariosLista
+                            ref={usuariosListRef}
+                            data={usuariosDisponibles}
+                            initialSelected={usuariosPreseleccionados}
+                            isEditable={isEditable}
+                            onChange={(t) => setListsTotals(prev => ({ ...prev, usuarios: t }))}
+                        />
                     </View>
 
-                    {fotos.length === 0 ? (
-                        <Text style={styles.noFotosText}>
-                            No hay imágenes agregadas. {isEditable ? 'Toca los botones para agregar fotos.' : ''}
-                        </Text>
-                    ) : (
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            style={styles.fotosCarrusel}
-                            contentContainerStyle={styles.fotosCarruselContent}
-                        >
-                            {fotos.map((foto, index) => (
-                                <View key={index} style={styles.fotoItemContainer}>
-                                    <TouchableOpacity
-                                        style={styles.fotoItem}
-                                        onPress={() => setImagenFullscreen(foto.uri)}
-                                        activeOpacity={0.7}
-                                    >
-                                        <Image
-                                            source={{ uri: foto.uri }}
-                                            style={styles.fotoImage}
-                                            resizeMode="cover"
-                                        />
-                                        {(mode === "crear") && (
-                                            <TouchableOpacity
-                                                style={styles.fotoCloseButton}
-                                                onPress={() => removeFoto(index)}
-                                            >
-                                                <Text style={styles.fotoCloseX}>✕</Text>
-                                            </TouchableOpacity>
-                                        )}
-                                    </TouchableOpacity>
+                    {/* List sections removed */}
 
-                                    {/* Nota de la foto */}
-                                    {mostrarNotaIndex === index ? (
-                                        <View style={styles.notaContainer}>
-                                            <TextInput
-                                                style={styles.notaInput}
-                                                value={notaActual}
-                                                onChangeText={setNotaActual}
-                                                placeholder="Agregar nota a la imagen..."
-                                                placeholderTextColor="#999"
-                                                multiline
-                                                numberOfLines={2}
+                    {/* Fotos Consulta - Galería */}
+                    <View style={styles.section}>
+                        <View style={styles.fotosHeader}>
+                            <Text style={styles.label}>Imágenes de la Consulta</Text>
+                            <View style={{ flexDirection: 'row', gap: Spacing.s }}>
+                                {(mode === "crear") && (
+                                    <>
+                                        <TouchableOpacity onPress={openCamera} style={[styles.eyeButton, styles.photoAddButton]}>
+                                            <Image
+                                                source={require('../assets/images/camera.png')}
+                                                style={styles.photoIcon}
+                                                resizeMode="contain"
                                             />
-                                            <View style={styles.notaButtonsContainer}>
-                                                <TouchableOpacity
-                                                    style={[styles.notaButton, styles.notaButtonCancel]}
-                                                    onPress={cancelarNota}
-                                                >
-                                                    <Text style={styles.notaButtonText}>Cancelar</Text>
-                                                </TouchableOpacity>
-                                                <TouchableOpacity
-                                                    style={[styles.notaButton, styles.notaButtonSave]}
-                                                    onPress={() => guardarNota(index)}
-                                                >
-                                                    <Text style={styles.notaButtonText}>Guardar</Text>
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-                                    ) : (
-                                        <View style={styles.fotoInfoContainer}>
-                                            <Text style={styles.fotoNotaText} numberOfLines={1}>
-                                                {foto.nota || 'Sin nota'}
-                                            </Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={openGallery} style={[styles.eyeButton, styles.photoAddButton]}>
+                                            <Image
+                                                source={require('../assets/images/galeria-de-imagenes.png')}
+                                                style={styles.photoIcon}
+                                                resizeMode="contain"
+                                            />
+                                        </TouchableOpacity>
+                                    </>
+                                )}
+                            </View>
+                        </View>
+
+                        {fotos.length === 0 ? (
+                            <Text style={styles.noFotosText}>
+                                No hay imágenes agregadas. {isEditable ? 'Toca los botones para agregar fotos.' : ''}
+                            </Text>
+                        ) : (
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={styles.fotosCarrusel}
+                                contentContainerStyle={styles.fotosCarruselContent}
+                            >
+                                {fotos.map((foto, index) => (
+                                    <View key={index} style={styles.fotoItemContainer}>
+                                        <TouchableOpacity
+                                            style={styles.fotoItem}
+                                            onPress={() => setImagenFullscreen(foto.uri)}
+                                            activeOpacity={0.7}
+                                        >
+                                            <Image
+                                                source={{ uri: foto.uri }}
+                                                style={styles.fotoImage}
+                                                resizeMode="cover"
+                                            />
                                             {(mode === "crear") && (
                                                 <TouchableOpacity
-                                                    style={styles.addNotaButton}
-                                                    onPress={() => agregarNota(index)}
+                                                    style={styles.fotoCloseButton}
+                                                    onPress={() => removeFoto(index)}
                                                 >
-                                                    <Text style={styles.addNotaButtonText}>
-                                                        {foto.nota ? 'Editar nota' : 'Agregar nota'}
-                                                    </Text>
+                                                    <Text style={styles.fotoCloseX}>✕</Text>
                                                 </TouchableOpacity>
                                             )}
-                                        </View>
-                                    )}
-                                </View>
-                            ))}
-                        </ScrollView>
-                    )}
-                </View>
+                                        </TouchableOpacity>
 
-                {/* Diagnóstico */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeaderWithButton}>
-                        <Text style={styles.label}>Diagnóstico</Text>
-                        <AudioRecordButton field="diagnostico" label="Grabar" />
+                                        {/* Nota de la foto */}
+                                        {mostrarNotaIndex === index ? (
+                                            <View style={styles.notaContainer}>
+                                                <TextInput
+                                                    style={styles.notaInput}
+                                                    value={notaActual}
+                                                    onChangeText={setNotaActual}
+                                                    placeholder="Agregar nota a la imagen..."
+                                                    placeholderTextColor="#999"
+                                                    multiline
+                                                    numberOfLines={2}
+                                                />
+                                                <View style={styles.notaButtonsContainer}>
+                                                    <TouchableOpacity
+                                                        style={[styles.notaButton, styles.notaButtonCancel]}
+                                                        onPress={cancelarNota}
+                                                    >
+                                                        <Text style={styles.notaButtonText}>Cancelar</Text>
+                                                    </TouchableOpacity>
+                                                    <TouchableOpacity
+                                                        style={[styles.notaButton, styles.notaButtonSave]}
+                                                        onPress={() => guardarNota(index)}
+                                                    >
+                                                        <Text style={styles.notaButtonText}>Guardar</Text>
+                                                    </TouchableOpacity>
+                                                </View>
+                                            </View>
+                                        ) : (
+                                            <View style={styles.fotoInfoContainer}>
+                                                <Text style={styles.fotoNotaText} numberOfLines={1}>
+                                                    {foto.nota || 'Sin nota'}
+                                                </Text>
+                                                {(mode === "crear") && (
+                                                    <TouchableOpacity
+                                                        style={styles.addNotaButton}
+                                                        onPress={() => agregarNota(index)}
+                                                    >
+                                                        <Text style={styles.addNotaButtonText}>
+                                                            {foto.nota ? 'Editar nota' : 'Agregar nota'}
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                )}
+                                            </View>
+                                        )}
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        )}
                     </View>
 
-                    {isView ? (
-                        <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
-                            {consultaData.diagnostico || '-'}
-                        </Text>
-                    ) : (
-                        <AutocompleteTextInput
-                            style={[styles.input, styles.largeInput]}
-                            placeholder="Describe el diagnóstico..."
-                            value={consultaData.diagnostico}
-                            onChangeText={(value) => handleChange('diagnostico', value)}
-                            placeholderTextColor="#999"
-                            multiline
-                            numberOfLines={4}
-                            editable={isEditable}
-                            textAlignVertical="top"
-                        />
-                    )}
-                </View>
+                    {/* Diagnóstico */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeaderWithButton}>
+                            <Text style={styles.label}>Diagnóstico</Text>
+                            <AudioRecordButton field="diagnostico" label="Grabar" />
+                        </View>
 
-                {/* Tratamiento */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeaderWithButton}>
-                        <Text style={styles.label}>Tratamiento</Text>
-                        <AudioRecordButton field="tratamiento" label="Grabar" />
-                    </View>
-
-                    {isView ? (
-                        <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
-                            {consultaData.tratamiento || '-'}
-                        </Text>
-                    ) : (
-                        <AutocompleteTextInput
-                            style={[styles.input, styles.largeInput]}
-                            placeholder="Describe el tratamiento prescrito..."
-                            value={consultaData.tratamiento}
-                            onChangeText={(value) => handleChange('tratamiento', value)}
-                            placeholderTextColor="#999"
-                            multiline
-                            numberOfLines={4}
-                            editable={isEditable}
-                            textAlignVertical="top"
-                        />
-                    )}
-                </View>
-
-                {/* Patología */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHeaderWithButton}>
-                        <Text style={styles.label}>Patología</Text>
-                        <AudioRecordButton field="patologia" label="Grabar" />
-                    </View>
-
-                    {isView ? (
-                        <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
-                            {consultaData.patologia || '-'}
-                        </Text>
-                    ) : (
-                        <AutocompleteTextInput
-                            style={[styles.input, styles.largeInput]}
-                            placeholder="Describe la patología identificada..."
-                            value={consultaData.patologia}
-                            onChangeText={(value) => handleChange('patologia', value)}
-                            placeholderTextColor="#999"
-                            multiline
-                            numberOfLines={4}
-                            editable={isEditable}
-                            textAlignVertical="top"
-                        />
-                    )}
-                </View>
-
-                {/* Botones de acción */}
-                {isEditable && (
-                    <View style={styles.buttonsContainer}>
-                        <TouchableOpacity
-                            style={[styles.saveButton, loading && styles.buttonDisabled]}
-                            onPress={handleSave}
-                            disabled={loading}
-                        >
-                            <Text style={styles.saveButtonText}>
-                                {mode === 'editar' ? 'Guardar Cambios' : 'Crear Consulta'}
+                        {isView ? (
+                            <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
+                                {consultaData.diagnostico || '-'}
                             </Text>
-                        </TouchableOpacity>
+                        ) : (
+                            <AutocompleteTextInput
+                                style={[styles.input, styles.largeInput]}
+                                placeholder="Describe el diagnóstico..."
+                                value={consultaData.diagnostico}
+                                onChangeText={(value) => handleChange('diagnostico', value)}
+                                placeholderTextColor="#999"
+                                multiline
+                                numberOfLines={4}
+                                editable={isEditable}
+                                textAlignVertical="top"
+                            />
+                        )}
                     </View>
-                )}
-            </ScrollView>
+
+                    {/* Tratamiento */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeaderWithButton}>
+                            <Text style={styles.label}>Tratamiento</Text>
+                            <AudioRecordButton field="tratamiento" label="Grabar" />
+                        </View>
+
+                        {isView ? (
+                            <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
+                                {consultaData.tratamiento || '-'}
+                            </Text>
+                        ) : (
+                            <AutocompleteTextInput
+                                style={[styles.input, styles.largeInput]}
+                                placeholder="Describe el tratamiento prescrito..."
+                                value={consultaData.tratamiento}
+                                onChangeText={(value) => handleChange('tratamiento', value)}
+                                placeholderTextColor="#999"
+                                multiline
+                                numberOfLines={4}
+                                editable={isEditable}
+                                textAlignVertical="top"
+                            />
+                        )}
+                    </View>
+
+                    {/* Patología */}
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeaderWithButton}>
+                            <Text style={styles.label}>Patología</Text>
+                            <AudioRecordButton field="patologia" label="Grabar" />
+                        </View>
+
+                        {isView ? (
+                            <Text style={[styles.input, styles.disabledInput, styles.largeInput]}>
+                                {consultaData.patologia || '-'}
+                            </Text>
+                        ) : (
+                            <AutocompleteTextInput
+                                style={[styles.input, styles.largeInput]}
+                                placeholder="Describe la patología identificada..."
+                                value={consultaData.patologia}
+                                onChangeText={(value) => handleChange('patologia', value)}
+                                placeholderTextColor="#999"
+                                multiline
+                                numberOfLines={4}
+                                editable={isEditable}
+                                textAlignVertical="top"
+                            />
+                        )}
+                    </View>
+
+                    {/* Botones de acción */}
+                    {isEditable && (
+                        <View style={styles.buttonsContainer}>
+                            <TouchableOpacity
+                                style={[styles.saveButton, loading && styles.buttonDisabled]}
+                                onPress={handleSave}
+                                disabled={loading}
+                            >
+                                <Text style={styles.saveButtonText}>
+                                    {mode === 'editar' ? 'Guardar Cambios' : 'Crear Consulta'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+                </ScrollView>
             </View>
         </KeyboardAvoidingView>
     );
