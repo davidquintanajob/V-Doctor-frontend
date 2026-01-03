@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image, ToastAndroid } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
@@ -46,9 +46,14 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
     React.useEffect(() => {
         setItems((initial || []).map(it => ({ ...it, nota_list: it.nota_list ?? '' })));
     }, [initial]);
-    const addItem = () => {
-        setItems(prev => ([...prev, {
-            id: `${Date.now()}_${prev.length}`,
+    // Refs para ApiAutocomplete y foco al último agregado
+    const autocompleteRefs = useRef({});
+    const [lastAddedId, setLastAddedId] = useState(null);
+
+    const addItem = (afterId = null) => {
+        const newId = `${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+        const newItem = {
+            id: newId,
             selected: null,
             unidad_medida: '',
             categoria: '',
@@ -56,10 +61,22 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
             precio_cup: '',
             nota_list: '',
             cantidad: '1'
-        }]));
+        };
+
+        setItems(prev => {
+            if (!afterId) return [...prev, newItem];
+            const idx = prev.findIndex(v => v.id === afterId);
+            if (idx === -1) return [...prev, newItem];
+            const copy = [...prev];
+            copy.splice(idx + 1, 0, newItem);
+            return copy;
+        });
+
+        setLastAddedId(newId);
     };
 
     const removeItem = (id) => {
+        try { delete autocompleteRefs.current[id]; } catch (e) {}
         setItems(prev => prev.filter(v => v.id !== id));
     };
 
@@ -96,6 +113,18 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
         }) : v));
     };
 
+    // Enfocar el input del último item agregado
+    React.useEffect(() => {
+        if (!lastAddedId) return;
+        const ref = autocompleteRefs.current[lastAddedId];
+        if (ref) {
+            setTimeout(() => {
+                try { if (typeof ref.focus === 'function') ref.focus(); else if (ref.current && typeof ref.current.focus === 'function') ref.current.focus(); } catch (e) {}
+            }, 50);
+        }
+        setLastAddedId(null);
+    }, [items, lastAddedId]);
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -104,13 +133,15 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
                     <Text style={styles.title}>Vacunas</Text>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.addButton, (!isEditable || (items.length > 0 && !items[items.length - 1].selected)) && styles.buttonDisabled]}
-                    onPress={addItem}
-                    disabled={!isEditable || (items.length > 0 && !items[items.length - 1].selected)}
-                >
-                    <Text style={styles.addButtonText}>+ Agregar</Text>
-                </TouchableOpacity>
+                {items.length === 0 && (
+                    <TouchableOpacity
+                        style={[styles.addButton, !isEditable && styles.buttonDisabled]}
+                        onPress={() => addItem(null)}
+                        disabled={!isEditable}
+                    >
+                        <Text style={styles.addButtonText}>+ Agregar</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             <View style={styles.list}>
@@ -125,6 +156,7 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
                                 placeholder="Buscar vacuna..."
                                 delay={400}
                                 initialValue={entry.selected}
+                                ref={(r) => { autocompleteRefs.current[entry.id] = r; }}
                             />
                         </View>
 
@@ -221,6 +253,14 @@ const VacunasLista = forwardRef(({ isEditable = true, initial = [], onChange }, 
                         )}
 
                         <View style={styles.itemButtonsRow}>
+                            <TouchableOpacity
+                                style={[styles.addButton, (!isEditable || !entry.selected || idx !== items.length - 1) && styles.buttonDisabled, { marginRight: Spacing.s }]}
+                                onPress={() => addItem(entry.id)}
+                                disabled={!isEditable || !entry.selected || idx !== items.length - 1}
+                            >
+                                <Text style={styles.addButtonText}>+ Agregar</Text>
+                            </TouchableOpacity>
+
                             <TouchableOpacity
                                 style={[styles.deleteButton, !isEditable && styles.buttonDisabled]}
                                 onPress={() => removeItem(entry.id)}

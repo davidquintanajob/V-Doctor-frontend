@@ -1,5 +1,5 @@
 // components/ApiAutocomplete.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import {
   View,
   Text,
@@ -14,23 +14,24 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Spacing, Typography } from '../variables';
 
-const ApiAutocomplete = ({
-  endpoint,
-  body = {},
-  // `searchKey` indica qué propiedad del body debe ser reemplazada
-  // por la cadena que escribe el usuario. Por defecto sigue siendo 'nombre'
-  searchKey = 'nombre',
-  displayKey = 'nombre',
-  displayFormat,
-  onItemSelect,
-  placeholder = 'Buscar...',
-  delay = 500,
-  style,
-  inputStyle,
-  resultsContainerStyle,
-  itemStyle,
-  initialValue = null, // NUEVA PROPS para valor inicial
-}) => {
+function ApiAutocomplete(props, ref) {
+  const {
+    endpoint,
+    body = {},
+    // `searchKey` indica qué propiedad del body debe ser reemplazada
+    // por la cadena que escribe el usuario. Por defecto sigue siendo 'nombre'
+    searchKey = 'nombre',
+    displayKey = 'nombre',
+    displayFormat,
+    onItemSelect,
+    placeholder = 'Buscar...',
+    delay = 500,
+    style,
+    inputStyle,
+    resultsContainerStyle,
+    itemStyle,
+    initialValue = null, // NUEVA PROPS para valor inicial
+  } = props;
   const [query, setQuery] = useState('');
   const [queryLimpia, setQueryLimpia] = useState(''); // Estado separado para la query limpia
   const [results, setResults] = useState([]);
@@ -41,6 +42,14 @@ const ApiAutocomplete = ({
   
   const timeoutRef = useRef(null);
   const inputRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      try {
+        inputRef.current && inputRef.current.focus && inputRef.current.focus();
+      } catch (e) {}
+    }
+  }));
 
   // Efecto para inicializar el query cuando hay un initialValue
   useEffect(() => {
@@ -401,4 +410,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ApiAutocomplete;
+export default forwardRef(ApiAutocomplete);

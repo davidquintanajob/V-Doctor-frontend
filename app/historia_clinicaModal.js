@@ -1087,7 +1087,7 @@ export default function HistoriaClinicaModalScreen() {
                 console.error('Error calculando totales desde ref:', err);
             }
         });
-        
+
         // Calcular y asignar porcentajes a todos los items seleccionados
         if (totalCobrar > 0) {
             allSelectedItems.forEach(({ item, itemTotal }) => {
@@ -1563,7 +1563,7 @@ export default function HistoriaClinicaModalScreen() {
     // Función auxiliar para crear ventas de una lista específica
     const createVentasForList = async (cfgHost, cfgToken, id_consulta, itemsList, tipo, usuariosIds) => {
         if (!itemsList || itemsList.length === 0) return { ok: true, count: 0 };
-        
+
         setValidationTitle(`Creando ventas de ${tipo}...`);
         const total = itemsList.length;
         let done = 0;
@@ -1585,7 +1585,7 @@ export default function HistoriaClinicaModalScreen() {
 
             if (userTotals.totalCobrar === null) {
                 precioAux = parseFloat(entry.precio_cup || 0) || 0;
-            }else{
+            } else {
                 precioAux = ((entry.partePorcientoTotalSuma * userTotals.totalCobrar) / 100) / (entry.cantidad || 1);
             }
 
@@ -2465,8 +2465,9 @@ export default function HistoriaClinicaModalScreen() {
     return (
         <KeyboardAvoidingView
             style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 80}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+            enabled
         >
             <View style={styles.container}>
                 <TopBar onMenuNavigate={() => { }} />
@@ -2661,12 +2662,12 @@ export default function HistoriaClinicaModalScreen() {
                                     const displayTotalCon = useUser ? userTotals.totalConDescuento : totalConDescuento;
                                     return (
                                         <>
-                                            <TouchableOpacity style={styles.summaryRow} onPress={() => {(mode === "crear")? setTotalsModalVisible(true) : {}}}>
+                                            <TouchableOpacity style={styles.summaryRow} onPress={() => { (mode === "crear") ? setTotalsModalVisible(true) : {} }}>
                                                 <Text style={styles.summaryLabel}>Total a cobrar:</Text>
                                                 <Text style={styles.summaryValue}>${Number(displayTotalCobrar).toFixed(2)}</Text>
                                             </TouchableOpacity>
 
-                                            <TouchableOpacity style={styles.summaryRow} onPress={() => {(mode === "crear")? setTotalsModalVisible(true) : {}}}>
+                                            <TouchableOpacity style={styles.summaryRow} onPress={() => { (mode === "crear") ? setTotalsModalVisible(true) : {} }}>
                                                 <View style={styles.summaryLabelContainer}>
                                                     <Text style={styles.summaryLabel}>Total con descuento </Text>
                                                     <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>

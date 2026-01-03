@@ -1,4 +1,4 @@
-import React, { useState, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, forwardRef, useImperativeHandle, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
@@ -46,16 +46,32 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         setItems(initial || []);
     }, [initial]);
 
-    const addItem = () => {
-        setItems(prev => ([...prev, {
-            id: `${Date.now()}_${prev.length}`,
+    const autocompleteRefs = useRef({});
+    const [lastAddedId, setLastAddedId] = useState(null);
+
+    const addItem = (afterId = null) => {
+        const newId = `${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+        const newItem = {
+            id: newId,
             selected: null,
             precio_cup: '',
             cantidad: '1'
-        }]));
+        };
+
+        setItems(prev => {
+            if (!afterId) return [...prev, newItem];
+            const idx = prev.findIndex(v => v.id === afterId);
+            if (idx === -1) return [...prev, newItem];
+            const copy = [...prev];
+            copy.splice(idx + 1, 0, newItem);
+            return copy;
+        });
+
+        setLastAddedId(newId);
     };
 
     const removeItem = (id) => {
+        try { delete autocompleteRefs.current[id]; } catch (e) {}
         setItems(prev => prev.filter(v => v.id !== id));
     };
 
@@ -78,6 +94,18 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         }) : v));
     };
 
+    // Enfocar el input del último item agregado
+    React.useEffect(() => {
+        if (!lastAddedId) return;
+        const ref = autocompleteRefs.current[lastAddedId];
+        if (ref) {
+            setTimeout(() => {
+                try { if (typeof ref.focus === 'function') ref.focus(); else if (ref.current && typeof ref.current.focus === 'function') ref.current.focus(); } catch (e) {}
+            }, 50);
+        }
+        setLastAddedId(null);
+    }, [items, lastAddedId]);
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
@@ -86,13 +114,15 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                     <Text style={styles.title}>Servicios</Text>
                 </View>
 
-                <TouchableOpacity
-                    style={[styles.addButton, (!isEditable || (items.length > 0 && !items[items.length - 1].selected)) && styles.buttonDisabled]}
-                    onPress={addItem}
-                    disabled={!isEditable || (items.length > 0 && !items[items.length - 1].selected)}
-                >
-                    <Text style={styles.addButtonText}>+ Agregar</Text>
-                </TouchableOpacity>
+                {items.length === 0 && (
+                    <TouchableOpacity
+                        style={[styles.addButton, !isEditable && styles.buttonDisabled]}
+                        onPress={() => addItem(null)}
+                        disabled={!isEditable}
+                    >
+                        <Text style={styles.addButtonText}>+ Agregar</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
             <View style={styles.list}>
@@ -108,6 +138,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                                 placeholder="Buscar servicio..."
                                 delay={400}
                                 initialValue={entry.selected}
+                                ref={(r) => { autocompleteRefs.current[entry.id] = r; }}
                             />
                         </View>
 
@@ -158,6 +189,14 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                         )}
 
                         <View style={styles.itemButtonsRow}>
+                            <TouchableOpacity
+                                style={[styles.addButton, (!isEditable || !entry.selected || idx !== items.length - 1) && styles.buttonDisabled, { marginRight: Spacing.s }]}
+                                onPress={() => addItem(entry.id)}
+                                disabled={!isEditable || !entry.selected || idx !== items.length - 1}
+                            >
+                                <Text style={styles.addButtonText}>+ Agregar</Text>
+                            </TouchableOpacity>
+
                             <TouchableOpacity
                                 style={[styles.deleteButton, !isEditable && styles.buttonDisabled]}
                                 onPress={() => removeItem(entry.id)}
