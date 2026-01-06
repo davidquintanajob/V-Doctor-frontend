@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -14,12 +14,18 @@ import {
     Keyboard,
     Platform,
     Linking,
+    Modal,
+    FlatList,
+    Dimensions,
+    ActivityIndicator,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Slider from '@react-native-community/slider';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as MediaLibrary from 'expo-media-library';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import TopBar from '../components/TopBar';
 import DropdownGenerico from '../components/DropdownGenerico';
@@ -87,7 +93,16 @@ export default function PacienteModalScreen() {
     const [sexoSeleccionado, setSexoSeleccionado] = useState(pacienteData.sexo || null);
 
     const [loadedImageUri, setLoadedImageUri] = useState(null);
-
+    
+    // Camera / Gallery states (use expo-camera + expo-media-library like historia_clinicaModal)
+    const cameraRef = useRef(null);
+    // Guards to avoid opening multiple times
+    const isCameraOpeningRef = useRef(false);
+    const isGalleryOpeningRef = useRef(false);
+    const [cameraModalVisible, setCameraModalVisible] = useState(false);
+    const [cameraReady, setCameraReady] = useState(false);
+    const [galleryModalVisible, setGalleryModalVisible] = useState(false);
+    const [mediaAssets, setMediaAssets] = useState([]);
     const motivosFallecimiento = [
         { id: 1, nombre: 'Eutanasia' },
         { id: 2, nombre: 'Accidente' },
@@ -249,6 +264,28 @@ export default function PacienteModalScreen() {
         }
     };
 
+        // Función para comprimir imágenes sin pérdida de calidad visible (copiada de historia_clinicaModal)
+        const comprimirImagen = async (uri) => {
+            try {
+                const fileInfo = await FileSystem.getInfoAsync(uri);
+                const sizeBefore = fileInfo.size;
+
+                const result = await ImageManipulator.manipulateAsync(
+                    uri,
+                    [{ resize: { width: 1024 } }],
+                    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+                );
+
+                const compressedFileInfo = await FileSystem.getInfoAsync(result.uri);
+                const sizeAfter = compressedFileInfo.size;
+
+                return { uri: result.uri, base64: result.base64, width: result.width, height: result.height };
+            } catch (error) {
+                console.error('Error en compresión de imagen:', error);
+                throw error;
+            }
+        };
+
     const clampDescuento = (value) => {
         const num = Number(value || 0);
         if (num < 0) return '0';
@@ -267,11 +304,22 @@ export default function PacienteModalScreen() {
                         .replace(/^\/+/, '');
 
                     const imageUrl = `${apiHost.replace(/\/+$/, '')}/${cleanedPath}`;
-                    setLoadedImageUri(imageUrl);
+
+                    // Añadir cache-buster para evitar imágenes antiguas en cache
+                    const cacheBustedUrl = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
+
+                    // Forzar uso de la imagen de la API: limpiar cualquier foto local tomada anteriormente
+                    
+                    setPhotoUri(null);
+                    setImagenBase64(null);
+
+                    setLoadedImageUri(cacheBustedUrl);
 
                     // Verificar que la imagen existe
-                    const response = await fetch(imageUrl, { method: 'HEAD' });
+                    const response = await fetch(cacheBustedUrl, { method: 'HEAD' });
+                    
                     if (!response.ok) {
+                        console.warn('[PacienteModal] La imagen remota no existe o devolvió error:', response.status);
                         setLoadedImageUri(null);
                     }
                 } catch (error) {
@@ -279,12 +327,20 @@ export default function PacienteModalScreen() {
                     setLoadedImageUri(null);
                 }
             } else {
+                // Si no hay foto en la API, mantener cualquier foto local tomada por el usuario
+                // (no forzamos a null aquí para preservar una foto recién tomada en la sesión)
                 setLoadedImageUri(null);
             }
         };
 
         loadPatientImage();
     }, [pacienteData.foto_ruta, apiHost]);
+
+    // Log which image source is currently active for preview (API vs local capture)
+    useEffect(() => {
+        const previewSource = pacienteData.foto_ruta ? 'api:foto_ruta' : (photoUri ? 'local:photoUri' : (loadedImageUri ? 'loadedImageUri' : 'none'));
+
+    }, [pacienteData.foto_ruta, photoUri, loadedImageUri]);
 
     // Efecto para cargar el estado del paciente y motivo de fallecimiento
     useEffect(() => {
@@ -365,36 +421,46 @@ export default function PacienteModalScreen() {
     };
 
     const openCamera = async () => {
+        // Evitar múltiples llamadas simultáneas
+        if (isCameraOpeningRef.current || cameraModalVisible) return;
+        isCameraOpeningRef.current = true;
+
         try {
-            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la cámara.');
-                return;
-            }
-
-            const result = await ImagePicker.launchCameraAsync({
-                quality: 0.7,
-                allowsEditing: true,
-                aspect: [4, 3],
-            });
-
-            // SDK newer uses result.assets
-            const uri = result.assets && result.assets[0] ? result.assets[0].uri : result.uri;
-            if (uri) {
-                setPhotoUri(uri);
-                // Intentar leer la imagen en base64 para enviarla al backend (maneja content:// y EncodingType faltante)
-                try {
-                    const base = await uriToBase64(uri);
-                    if (base) setImagenBase64(base);
-                    else setImagenBase64(null);
-                } catch (err) {
-                    console.warn('No se pudo leer la imagen en base64:', err);
-                    setImagenBase64(null);
-                }
-            }
+            setCameraModalVisible(true);
+            setTimeout(() => { isCameraOpeningRef.current = false; }, 500);
         } catch (err) {
             console.error('Error opening camera', err);
             Alert.alert('Error', 'No se pudo abrir la cámara.');
+            isCameraOpeningRef.current = false;
+        }
+    };
+
+    const openGallery = async () => {
+        // Evitar múltiples llamadas simultáneas
+        if (isGalleryOpeningRef.current || galleryModalVisible) return;
+        isGalleryOpeningRef.current = true;
+
+        try {
+            const { status } = await MediaLibrary.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la galería.');
+                isGalleryOpeningRef.current = false;
+                return;
+            }
+
+            const res = await MediaLibrary.getAssetsAsync({
+                mediaType: ['photo'],
+                first: 200,
+                sortBy: [MediaLibrary.SortBy.creationTime],
+            });
+
+            setMediaAssets(res.assets || []);
+            setGalleryModalVisible(true);
+            setTimeout(() => { isGalleryOpeningRef.current = false; }, 500);
+        } catch (err) {
+            console.error('Error opening gallery', err);
+            Alert.alert('Error', 'No se pudo abrir la galería.');
+            isGalleryOpeningRef.current = false;
         }
     };
 
@@ -527,6 +593,159 @@ export default function PacienteModalScreen() {
         }
     };
 
+    // Camera modal (simplified from historia_clinicaModal)
+    const CameraModal = () => {
+        if (!cameraModalVisible) return null;
+
+        const [permission, requestPermission] = useCameraPermissions();
+        const [isCameraReadyLocal, setIsCameraReadyLocal] = useState(false);
+
+        useEffect(() => {
+            if (cameraModalVisible && permission && !permission.granted) {
+                requestPermission();
+            }
+        }, [cameraModalVisible, permission]);
+
+        if (!permission) {
+            return (
+                <Modal visible={cameraModalVisible} transparent animationType="slide">
+                    <View style={styles.cameraLoadingContainer}>
+                        <ActivityIndicator size="large" color="#fff" />
+                        <Text style={styles.cameraLoadingText}>Cargando permisos...</Text>
+                    </View>
+                </Modal>
+            );
+        }
+
+        if (!permission.granted) {
+            return (
+                <Modal visible={cameraModalVisible} transparent animationType="slide">
+                    <View style={styles.cameraPermissionContainer}>
+                        <Text style={styles.cameraPermissionText}>
+                            La aplicación necesita acceso a la cámara para tomar fotos.
+                        </Text>
+                        <TouchableOpacity
+                            style={styles.cameraPermissionButton}
+                            onPress={requestPermission}
+                        >
+                            <Text style={styles.cameraPermissionButtonText}>Conceder permiso</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={[styles.cameraPermissionButton, { backgroundColor: 'transparent', marginTop: 10 }]}
+                            onPress={() => setCameraModalVisible(false)}
+                        >
+                            <Text style={[styles.cameraPermissionButtonText, { color: '#fff' }]}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+                </Modal>
+            );
+        }
+
+        const handleCapture = async () => {
+            if (!cameraRef.current) {
+                ToastAndroid.show('Cámara no lista', ToastAndroid.SHORT);
+                return;
+            }
+            try {
+                const photo = await cameraRef.current.takePictureAsync({ quality: 1, exif: true });
+                const compressed = await comprimirImagen(photo.uri);
+                if (compressed) {
+                    setPhotoUri(compressed.uri);
+                    setImagenBase64(compressed.base64 || null);
+                    setLoadedImageUri(null);
+                } else {
+                    setPhotoUri(photo.uri);
+                    setLoadedImageUri(null);
+                    try {
+                        const b = await uriToBase64(photo.uri);
+                        setImagenBase64(b || null);
+                    } catch (e) { console.warn('[PacienteModal] Error convirtiendo foto a base64', e); setImagenBase64(null); }
+                }
+                setCameraModalVisible(false);
+            } catch (err) {
+                console.error('Error taking photo', err);
+                Alert.alert('Error', 'No se pudo tomar la foto.');
+            }
+        };
+
+        return (
+            <Modal visible={cameraModalVisible} transparent animationType="slide">
+                <View style={styles.cameraFullScreen}>
+                    <View style={styles.cameraHeader}>
+                        <TouchableOpacity style={styles.cameraCloseBtn} onPress={() => setCameraModalVisible(false)}>
+                            <Text style={styles.cameraCloseText}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.cameraContent}>
+                        <CameraView
+                            ref={cameraRef}
+                            style={StyleSheet.absoluteFillObject}
+                            facing="back"
+                            onCameraReady={() => { setCameraReady(true); setIsCameraReadyLocal(true); }}
+                        />
+                    </View>
+
+                    <View style={styles.cameraFooter}>
+                        <TouchableOpacity style={styles.captureBtn} onPress={handleCapture}>
+                            <View style={styles.captureBtnInner} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+        );
+    };
+
+    // Gallery modal similar to historia_clinicaModal
+    const GalleryModal = () => {
+        if (!galleryModalVisible) return null;
+
+        const handleSelect = async (asset) => {
+            try {
+                const compressedResult = await comprimirImagen(asset.uri);
+                if (compressedResult) {
+                    setPhotoUri(compressedResult.uri);
+                    setImagenBase64(compressedResult.base64 || null);
+                    setLoadedImageUri(null);
+                } else {
+                    setPhotoUri(asset.uri);
+                    setLoadedImageUri(null);
+                    const b = await uriToBase64(asset.uri);
+                    setImagenBase64(b || null);
+                }
+                ToastAndroid.show('Foto agregada', ToastAndroid.SHORT);
+            } catch (err) {
+                console.error('Error seleccionando imagen:', err);
+                Alert.alert('Error', 'No se pudo procesar la imagen: ' + err.message);
+            } finally {
+                setGalleryModalVisible(false);
+            }
+        };
+
+        return (
+            <Modal visible={galleryModalVisible} transparent animationType="slide">
+                <View style={styles.galleryOverlay}>
+                    <View style={styles.galleryHeader}>
+                        <TouchableOpacity onPress={() => setGalleryModalVisible(false)}>
+                            <Text style={styles.notaButtonText}>Cancelar</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    <FlatList
+                        data={mediaAssets}
+                        numColumns={4}
+                        keyExtractor={(item) => item.id}
+                        renderItem={({ item }) => (
+                            <TouchableOpacity onPress={() => handleSelect(item)} style={{ margin: Spacing.xs }}>
+                                <Image source={{ uri: item.uri }} style={styles.galleryThumb} />
+                            </TouchableOpacity>
+                        )}
+                    />
+                </View>
+            </Modal>
+        );
+    };
+
     const makePhoneCall = async (telefono) => {
 
         if (!telefono) {
@@ -590,6 +809,8 @@ export default function PacienteModalScreen() {
     return (
         <View style={{ flex: 1 }}>
             <TopBar onMenuNavigate={() => { }} />
+            <CameraModal />
+            <GalleryModal />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
                 <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -804,27 +1025,29 @@ export default function PacienteModalScreen() {
                                 {/* Solo mostrar botones de foto si NO está en modo ver */}
                                 {!isView && (
                                     <View style={styles.photoButtonsRow}>
-                                        <TouchableOpacity style={styles.photoButton} onPress={openCamera}>
-                                            <Text style={styles.photoButtonText}>Tomar foto</Text>
+                                        <TouchableOpacity onPress={openCamera} style={[styles.eyeButton, styles.photoAddButton]}>
+                                            <Image
+                                                source={require('../assets/images/camera.png')}
+                                                style={styles.photoIcon}
+                                                resizeMode="contain"
+                                            />
                                         </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={[styles.deletePhotoButton, (!photoUri && !loadedImageUri) && styles.deletePhotoButtonDisabled]}
-                                            onPress={() => {
-                                                removePhoto();
-                                                setLoadedImageUri(null); // También eliminar la imagen cargada
-                                            }}
-                                            disabled={!photoUri && !loadedImageUri}
-                                        >
-                                            <Text style={styles.deletePhotoButtonText}>Eliminar</Text>
+                                        <TouchableOpacity onPress={openGallery} style={[styles.eyeButton, styles.photoAddButton]}>
+                                            <Image
+                                                source={require('../assets/images/galeria-de-imagenes.png')}
+                                                style={styles.photoIcon}
+                                                resizeMode="contain"
+                                            />
                                         </TouchableOpacity>
                                     </View>
                                 )}
 
                                 {/* Mostrar la nueva foto tomada O la imagen cargada */}
                                 {(photoUri || loadedImageUri) && (
-                                    <View style={styles.photoPreviewContainer}>
+                                    <View style={[styles.photoPreviewContainer, { position: 'relative' }] }>
                                         <Image
-                                            source={{ uri: photoUri || loadedImageUri }}
+                                            // Preferir la foto recién tomada/seleccionada (`photoUri`) sobre la remota (`loadedImageUri`)
+                                            source={{ uri: (photoUri || loadedImageUri) }}
                                             style={styles.photoPreview}
                                             resizeMode="cover"
                                             onError={() => {
@@ -832,6 +1055,13 @@ export default function PacienteModalScreen() {
                                                 setLoadedImageUri(null);
                                             }}
                                         />
+
+                                        <TouchableOpacity
+                                            onPress={() => { removePhoto(); setLoadedImageUri(null); }}
+                                            style={{ position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#900', zIndex: 1003 }}
+                                        >
+                                            <Text style={{ color: '#900', fontWeight: '700', fontSize: 14 }}>✕</Text>
+                                        </TouchableOpacity>
                                     </View>
                                 )}
 
@@ -1367,5 +1597,125 @@ const styles = StyleSheet.create({
         marginLeft: 20,
         borderWidth: 1,
         borderColor: '#000',
+    },
+    eyeButton: {
+        padding: Spacing.s,
+        borderRadius: 8,
+        backgroundColor: Colors.primarySuave,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: Spacing.s,
+        borderWidth: 1,
+        borderColor: '#000',
+    },
+    photoAddButton: {
+        width: 42,
+        height: 42,
+        marginLeft: Spacing.s,
+    },
+    photoIcon: {
+        width: 24,
+        height: 24,
+        tintColor: Colors.textPrimary,
+    },
+    // Camera & Gallery styles (copied/adapted from historia_clinicaModal)
+    cameraFullScreen: {
+        flex: 1,
+        backgroundColor: '#000',
+        justifyContent: 'space-between',
+    },
+    cameraHeader: {
+        height: 60,
+        padding: Spacing.s,
+        justifyContent: 'center',
+    },
+    cameraCloseBtn: {
+        alignSelf: 'flex-end',
+        padding: Spacing.s,
+    },
+    cameraCloseText: {
+        color: '#fff',
+        fontSize: 24,
+    },
+    cameraContent: {
+        flex: 1,
+    },
+    cameraFooter: {
+        height: 120,
+        backgroundColor: 'rgba(0,0,0,0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    captureBtn: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+        backgroundColor: 'rgba(255,255,255,0.3)',
+        borderWidth: 3,
+        borderColor: '#fff',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    captureBtnInner: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: '#fff',
+    },
+    cameraPermissionContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: Spacing.m,
+        backgroundColor: 'rgba(0,0,0,0.8)'
+    },
+    cameraPermissionText: {
+        color: '#fff',
+        fontSize: 16,
+        textAlign: 'center',
+        marginBottom: Spacing.m,
+    },
+    cameraPermissionButton: {
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+        borderRadius: 8,
+        marginTop: Spacing.s,
+    },
+    cameraPermissionButtonText: {
+        color: '#fff',
+        fontSize: 16,
+        fontWeight: 'bold',
+    },
+    cameraLoadingContainer: {
+        alignItems: 'center',
+        padding: 20,
+        justifyContent: 'center',
+    },
+    cameraLoadingText: {
+        color: '#fff',
+        marginTop: 10,
+        fontSize: 16,
+    },
+    galleryOverlay: {
+        flex: 1,
+        backgroundColor: '#fff',
+        paddingTop: Spacing.m,
+    },
+    galleryHeader: {
+        paddingHorizontal: Spacing.m,
+        paddingBottom: Spacing.s,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        alignItems: 'flex-end',
+    },
+    galleryThumb: {
+        width: (Dimensions.get('window').width - (Spacing.m * 2) - (Spacing.xs * 6)) / 4,
+        height: (Dimensions.get('window').width - (Spacing.m * 2) - (Spacing.xs * 6)) / 4,
+        borderRadius: 6,
+    },
+    notaButtonText: {
+        fontSize: Typography.small,
+        fontWeight: '600',
     },
 });

@@ -606,8 +606,12 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
     };
 
     const getPatientImageSource = () => {
-        if (!paciente) {
-            return require('../assets/images/especies/huella.png');
+        if (!paciente) return require('../assets/images/especies/huella.png');
+
+        // Preferir imagen desde la API (foto_url primero, luego foto_ruta)
+        if (paciente.foto_url) {
+            const cleanedUrl = String(paciente.foto_url).replace(/\\/g, '/').replace(/\/\/+/g, '/');
+            return { uri: `${cleanedUrl}${cleanedUrl.includes('?') ? '&' : '?'}t=${Date.now()}` };
         }
 
         if (paciente.foto_ruta) {
@@ -618,18 +622,19 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
                 const baseHost = apiHost.replace(/\/+$/, '');
                 const cleanPath = cleaned.replace(/^\/+/, '');
                 const finalUrl = `${baseHost}/${cleanPath}`;
-                return { uri: finalUrl };
+                return { uri: `${finalUrl}${finalUrl.includes('?') ? '&' : '?'}t=${Date.now()}` };
             }
         }
+
+        // Si no hay imagen en la API, usar foto local tomada en la sesión
+        if (paciente.photoUri) return { uri: paciente.photoUri };
 
         if (paciente.especie) {
             const especieEncontrada = especies.find(esp =>
                 esp.nombre.toLowerCase() === paciente.especie.toLowerCase()
             );
 
-            if (especieEncontrada && especieEncontrada.image) {
-                return especieEncontrada.image;
-            }
+            if (especieEncontrada && especieEncontrada.image) return especieEncontrada.image;
         }
 
         return require('../assets/images/especies/huella.png');

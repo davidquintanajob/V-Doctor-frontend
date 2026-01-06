@@ -100,6 +100,9 @@ export default function HistoriaClinicaModalScreen() {
     // Estados y refs para cámara/galería usando expo-camera y expo-media-library
     const [cameraModalVisible, setCameraModalVisible] = useState(false);
     const cameraRef = React.useRef(null);
+    // Guards to avoid multiple openings
+    const isCameraOpeningRef = React.useRef(false);
+    const isGalleryOpeningRef = React.useRef(false);
     const [cameraType, setCameraType] = useState('back');
     const [cameraReady, setCameraReady] = useState(false);
     const [galleryModalVisible, setGalleryModalVisible] = useState(false);
@@ -639,23 +642,32 @@ export default function HistoriaClinicaModalScreen() {
 
     // Función para abrir la cámara: abre un modal con componente Camera
     const openCamera = async () => {
-        try {
+        // Evitar múltiples llamadas simultáneas
+        if (isCameraOpeningRef.current || cameraModalVisible) return;
+        isCameraOpeningRef.current = true;
 
+        try {
             // Abrir modal
             setCameraModalVisible(true);
-
+            setTimeout(() => { isCameraOpeningRef.current = false; }, 500);
         } catch (error) {
             console.error('Error abriendo cámara:', error);
             Alert.alert('Error', 'No se pudo abrir la cámara: ' + error.message);
+            isCameraOpeningRef.current = false;
         }
     };
 
     // Función para abrir galería: solicita permisos y carga assets para mostrar en modal
     const openGallery = async () => {
+        // Evitar múltiples llamadas simultáneas
+        if (isGalleryOpeningRef.current || galleryModalVisible) return;
+        isGalleryOpeningRef.current = true;
+
         try {
             const { status } = await MediaLibrary.requestPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('Permiso denegado', 'Se necesita permiso para acceder a la galería.');
+                isGalleryOpeningRef.current = false;
                 return;
             }
 
@@ -668,9 +680,11 @@ export default function HistoriaClinicaModalScreen() {
 
             setMediaAssets(res.assets || []);
             setGalleryModalVisible(true);
+            setTimeout(() => { isGalleryOpeningRef.current = false; }, 500);
         } catch (err) {
             console.error('Error opening gallery', err);
             Alert.alert('Error', 'No se pudo abrir la galería.');
+            isGalleryOpeningRef.current = false;
         }
     };
 

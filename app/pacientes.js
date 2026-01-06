@@ -527,29 +527,28 @@ export default function PacientesScreen() {
           {pacientesData.map((p, idx) => {
             const especieMatch = especies.find(e => e.nombre && String(e.nombre).toLowerCase() === String(p.especie).toLowerCase());
 
-            // Aplicar la misma lógica de referencia para las imágenes
+            // Aplicar lógica para preferir siempre la imagen desde la API si existe
             let imgSource;
-            if (p.photoUri) {
-              // Priorizar imagen local tomada
-              imgSource = { uri: p.photoUri };
-            } else if (p.foto_url) {
-              // Usar foto_url si está disponible, pero normalizarla
-              const cleanedUrl = String(p.foto_url).replace(/\\/g, '/').replace(/\/+/g, '/');
-              imgSource = { uri: cleanedUrl };
+            if (p.foto_url) {
+              // Usar foto_url si está disponible, pero normalizarla y añadir cache-buster
+              const cleanedUrl = String(p.foto_url).replace(/\\/g, '/').replace(/\/\/+/g, '/');
+              imgSource = { uri: `${cleanedUrl}${cleanedUrl.includes('?') ? '&' : '?'}t=${Date.now()}` };
             } else if (p.foto_ruta) {
-              // Si hay foto_ruta pero no foto_url, aplicar la misma normalización
+              // Si hay foto_ruta construir URL completa a partir de apiHost o usar ruta absoluta
               const cleaned = String(p.foto_ruta).replace(/\\/g, '/').replace(/^\/+/, '');
               if (/^https?:\/\//i.test(cleaned)) {
                 imgSource = { uri: cleaned };
               } else if (apiHost) {
-                // Eliminar slash duplicado y construir URL correctamente
                 const baseHost = apiHost.replace(/\/+$/, '');
                 const cleanPath = cleaned.replace(/^\/+/, '');
                 const finalUrl = `${baseHost}/${cleanPath}`;
-                imgSource = { uri: finalUrl };
+                imgSource = { uri: `${finalUrl}${finalUrl.includes('?') ? '&' : '?'}t=${Date.now()}` };
               } else {
                 imgSource = especieMatch ? especieMatch.image : require('../assets/images/especies/huella.png');
               }
+            } else if (p.photoUri) {
+              // Usar imagen local tomada sólo si no hay imagen en la API
+              imgSource = { uri: p.photoUri };
             } else {
               // Finalmente, imagen por especie o placeholder
               imgSource = especieMatch ? especieMatch.image : require('../assets/images/especies/huella.png');
