@@ -685,6 +685,15 @@ export default function PacienteModalScreen() {
                                 </View>
                             </View>
 
+                            {/* Mostrar número clínico en modo ver/editar */}
+                            {(mode === 'ver' || mode === 'editar') && (
+                                <View style={styles.numeroClinicoContainer}>
+                                    <Text style={styles.numeroClinicoLabel}>
+                                        N° Clínico: <Text style={styles.numeroClinicoText}>{pacienteData.numero_clinico || '-'}</Text>
+                                    </Text>
+                                </View>
+                            )}
+
                             <Separator />
 
                             {/* Fecha de nacimiento */}
@@ -774,7 +783,7 @@ export default function PacienteModalScreen() {
                             <View style={styles.inputGroup}>
                                 <Text style={styles.label}>Descuento (%)</Text>
                                 <TextInput
-                                    style={[styles.input, (isView ||           !isAdmin) && styles.disabledInput]}
+                                    style={[styles.input, (isView || !isAdmin) && styles.disabledInput]}
                                     value={descuento}
                                     onChangeText={(text) => {
                                         const valor = clampDescuento(text.replace(/[^0-9]/g, ''));
@@ -1315,6 +1324,22 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: '700',
         fontSize: 14
+    },
+    numeroClinicoContainer: {
+        backgroundColor: `${Colors.boton_azul}30`, // 50% de transparencia (80 en hexadecimal = 50%)
+        borderWidth: 2,
+        borderColor: Colors.boton_azul,
+        padding: Spacing.m,
+        borderRadius: 8,
+        marginTop: Spacing.m,
+    },
+    numeroClinicoLabel: {
+        color: Colors.textSecondary,
+        fontSize: Typography.body,
+    },
+    numeroClinicoText: {
+        fontWeight: '700',
+        color: Colors.textSecondary,
     },
     saveButton: {
         backgroundColor: Colors.boton_azul,

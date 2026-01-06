@@ -559,7 +559,10 @@ export default function PacientesScreen() {
               <TouchableOpacity key={p.id ?? idx} style={styles.pacienteItem} onPress={() => handleRowClick(p)} activeOpacity={0.8}>
                 <Image source={imgSource} style={styles.pacienteImage} resizeMode="cover" />
                 <View style={styles.pacienteInfo}>
-                  <Text style={styles.pacienteName}>{p.nombre}</Text>
+                  <Text style={styles.pacienteName}>
+                    {p.nombre}
+                    {p.numero_clinico ? <Text style={{ fontWeight: '700' }}> - {p.numero_clinico}</Text> : null}
+                  </Text>
                   <Text style={styles.pacienteText}>
                     <Text style={{ fontWeight: '600' }}>Dueño/s:</Text> {
                       p.clientes && p.clientes.length > 0

@@ -1034,7 +1034,10 @@ export default function ClienteModalScreen() {
                                                 <View key={idx} style={styles.pacienteItem}>
                                                     <Image source={imgSource} style={styles.pacienteImage} resizeMode="cover" />
                                                     <View style={styles.pacienteInfo}>
-                                                        <Text style={styles.pacienteName}>{p.nombre}</Text>
+                                                        <Text style={styles.pacienteName}>
+                                                            {p.nombre}
+                                                            {(mode === 'ver' || mode === 'editar') && p.numero_clinico ? <Text style={{ fontWeight: '700' }}> - {p.numero_clinico}</Text> : null}
+                                                        </Text>
                                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Especie:</Text> {p.especie?.nombre}</Text>
                                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Sexo:</Text> {p.sexo?.nombre}</Text>
                                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Raza:</Text> {p.raza}</Text>
@@ -1083,7 +1086,10 @@ export default function ClienteModalScreen() {
                                             <View key={idx} style={styles.pacienteItem}>
                                                 <Image source={imgSource} style={styles.pacienteImage} resizeMode="cover" />
                                                 <View style={styles.pacienteInfo}>
-                                                    <Text style={styles.pacienteName}>{p.nombre}</Text>
+                                                    <Text style={styles.pacienteName}>
+                                                        {p.nombre}
+                                                        {(mode === 'ver' || mode === 'editar') && p.numero_clinico ? <Text style={{ fontWeight: '700' }}> - {p.numero_clinico}</Text> : null}
+                                                    </Text>
                                                     <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Especie:</Text> {p.especie}</Text>
                                                     <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Sexo:</Text> {p.sexo}</Text>
                                                     <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Raza:</Text> {p.raza}</Text>
