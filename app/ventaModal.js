@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,15 +9,17 @@ import {
   KeyboardAvoidingView,
   Image,
   Platform,
+  findNodeHandle,
+  UIManager,
   ToastAndroid,
   Alert
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import DropdownGenerico from '../components/DropdownGenerico';
 import ApiAutocomplete from '../components/ApiAutocomplete';
 import TopBar from '../components/TopBar';
 import UsuariosLista from '../components/UsuariosLista';
+import QRScannerModal from '../components/QRScannerModal';
 import { Colors, Spacing, Typography } from '../variables';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -35,7 +37,7 @@ export default function VentaModalScreen() {
     precio_cobrado_cup: ventaParam?.precio_cobrado_cup ? String(ventaParam.precio_cobrado_cup) : '',
     precio_original_comerciable_cup: ventaParam?.precio_original_comerciable_cup ? String(ventaParam.precio_original_comerciable_cup) : '',
     precio_original_comerciable_usd: ventaParam?.precio_original_comerciable_usd ? String(ventaParam.precio_original_comerciable_usd) : '',
-    forma_pago: ventaParam?.forma_pago || '',
+    forma_pago: ventaParam?.forma_pago || 'Efectivo',
     tipo_comerciable: ventaParam?.tipo_comerciable || '',
     comerciable_display: (ventaParam?.comerciable?.producto?.nombre) || (ventaParam?.comerciable?.servicio?.descripcion) || '',
     comerciable_id: ventaParam?.comerciable?.id_comerciable || ventaParam?.comerciable?.id || null,
@@ -45,12 +47,21 @@ export default function VentaModalScreen() {
   }));
 
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showScannerModal, setShowScannerModal] = useState(false);
   const isEditable = mode !== 'ver';
   const [comerciableBusqueda, setComercialeBusqueda] = useState('');
   const [selectedComerciable, setSelectedComerciable] = useState(null);
+  const [clienteBusqueda, setClienteBusqueda] = useState('');
+  const [selectedCliente, setSelectedCliente] = useState(null);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState([]);
   const [usuariosLoading, setUsuariosLoading] = useState(false);
   const [usuariosPreseleccionados, setUsuariosPreseleccionados] = useState([]);
+  const usuariosListRef = useRef(null);
+  const scrollRef = useRef(null);
+  const comerciableFieldRef = useRef(null);
+  const usuariosFieldRef = useRef(null);
+  const cantidadFieldRef = useRef(null);
+  const precioFieldRef = useRef(null);
 
   const formaPagoOptions = [
     { id: 1, nombre: 'Efectivo' },
@@ -67,12 +78,22 @@ export default function VentaModalScreen() {
   useEffect(() => {
     // keep local state in sync if params change
     if (ventaParam) {
+      // calcular precio cobrado inicial aplicando descuento si viene en ventaParam
+      const descuentoVal = Number(ventaParam?.descuento) || 0;
+      let precioCobradoInit = null;
+      if (ventaParam?.precio_cobrado_cup != null) precioCobradoInit = Number(ventaParam.precio_cobrado_cup);
+      else if (ventaParam?.precio_original_comerciable_cup != null) precioCobradoInit = Number(ventaParam.precio_original_comerciable_cup);
+      else if (ventaParam?.comerciable?.precio_cup != null) precioCobradoInit = Number(ventaParam.comerciable.precio_cup);
+      else if (ventaParam?.comerciable?.producto?.costo_cup != null) precioCobradoInit = Number(ventaParam.comerciable.producto.costo_cup);
+      if (descuentoVal > 0 && precioCobradoInit != null) precioCobradoInit = formatearNumero(precioCobradoInit * (1 - descuentoVal / 100));
+
       setVentaData(prev => ({
-        ...prev, ...{
+        ...prev,
+        ...{
           id: ventaParam?.id_venta || ventaParam?.id || prev.id,
           fecha: ventaParam?.fecha || prev.fecha,
           cantidad: ventaParam?.cantidad ? String(ventaParam.cantidad) : prev.cantidad,
-          precio_cobrado_cup: ventaParam?.precio_cobrado_cup ? String(ventaParam.precio_cobrado_cup) : prev.precio_cobrado_cup,
+          precio_cobrado_cup: precioCobradoInit != null ? String(precioCobradoInit) : (ventaParam?.precio_cobrado_cup ? String(ventaParam.precio_cobrado_cup) : prev.precio_cobrado_cup),
           precio_original_comerciable_cup: ventaParam?.precio_original_comerciable_cup ? String(ventaParam?.precio_original_comerciable_cup) : prev.precio_original_comerciable_cup,
           precio_original_comerciable_usd: ventaParam?.precio_original_comerciable_usd ? String(ventaParam?.precio_original_comerciable_usd) : prev.precio_original_comerciable_usd,
           forma_pago: ventaParam?.forma_pago || prev.forma_pago,
@@ -84,31 +105,126 @@ export default function VentaModalScreen() {
           nota: ventaParam?.nota || prev.nota
         }
       }));
+      // Inicializar selectedComerciable para que ApiAutocomplete muestre el valor en modo ver/editar
+      try {
+        if (ventaParam.comerciable) {
+          setSelectedComerciable(ventaParam.comerciable);
+          try {
+            let tipoInit = 'servicio complejo';
+            const it = ventaParam.comerciable;
+            if (it.producto && it.medicamento) tipoInit = 'medicamento';
+            else if (it.producto) tipoInit = 'producto';
+            else if (it.servicio) tipoInit = 'servicio';
+            handleChange('tipo_comerciable', tipoInit);
+          } catch (e) {
+            handleChange('tipo_comerciable', ventaParam?.tipo_comerciable || '');
+          }
+        } else if (ventaParam.comerciable_display || ventaParam.comerciable_id) {
+          setSelectedComerciable({ nombre: ventaParam.comerciable_display || '', id_comerciable: ventaParam.comerciable_id || null });
+          handleChange('tipo_comerciable', ventaParam?.tipo_comerciable || '');
+        }
+        // Inicializar cliente si viene en params
+        try {
+          if (ventaParam.cliente) {
+            setSelectedCliente(ventaParam.cliente);
+            handleChange('id_cliente', ventaParam.cliente.id_cliente ?? ventaParam.cliente.id ?? null);
+            handleChange('nombre_cliente', ventaParam.cliente.nombre || ventaParam.cliente.nombre_cliente || ventaParam.nombre_cliente || '');
+          } else if (ventaParam.id_cliente || ventaParam.nombre_cliente) {
+            setSelectedCliente({ id_cliente: ventaParam.id_cliente, nombre: ventaParam.nombre_cliente });
+            handleChange('id_cliente', ventaParam.id_cliente ?? null);
+            handleChange('nombre_cliente', ventaParam.nombre_cliente ?? '');
+          }
+        } catch (e) {
+          // no-op
+        }
+      } catch (e) {
+        // no-op
+      }
     }
   }, [params.venta]);
 
   useEffect(() => {
     const fetchUsuarios = async () => {
       try {
-        const raw = await AsyncStorage.getItem('@config');
-        if (!raw) return;
-        const cfg = JSON.parse(raw);
-        const host = cfg.api_host || cfg.apihost || cfg.apiHost;
-        const token = cfg.token;
+        const rawCfg = await AsyncStorage.getItem('@config');
+        const cfg = rawCfg ? JSON.parse(rawCfg) : null;
+        const host = cfg?.api_host || cfg?.apihost || cfg?.apiHost;
+        const token = cfg?.token;
         if (!host) return;
         setUsuariosLoading(true);
         const url = `${host.replace(/\/+$/, '')}/usuario`;
-        const res = await fetch(url, { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } });
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(url, { headers });
         const text = await res.text();
         let json = null;
         try { json = JSON.parse(text); } catch (e) { json = null; }
-        if (!json) { setUsuariosDisponibles([]); setUsuariosPreseleccionados([]); setUsuariosLoading(false); return; }
+        if (!res.ok || !json) {
+          setUsuariosDisponibles([]);
+          setUsuariosPreseleccionados([]);
+          return;
+        }
+
         setUsuariosDisponibles(json);
-        if (ventaParam?.nombre_usuario) {
-          const found = json.find(u => (u.nombre_natural || u.nombre) === ventaParam.nombre_usuario || u.id_usuario === ventaParam?.id_usuario || u.id === ventaParam?.id);
-          if (found) setUsuariosPreseleccionados([found]);
+
+        const initialPreselected = [];
+
+        // Revisar config de usuario para preseleccionar si aplica
+        try {
+          let rawUserCfg = await AsyncStorage.getItem('@config.userConfig');
+          if (!rawUserCfg) rawUserCfg = await AsyncStorage.getItem('@config');
+          if (rawUserCfg) {
+            const userCfg = JSON.parse(rawUserCfg);
+            const currentId = userCfg?.usuario?.id_usuario || userCfg?.usuario?.idUsuario || null;
+            if (currentId) {
+              const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
+              if (found) initialPreselected.push(found);
+            }
+          }
+        } catch (err) {
+          console.error('Error reading config from AsyncStorage', err);
+        }
+
+        // Si la venta trae usuarios, agregarlos a la preselección (sin duplicados)
+        try {
+          if (ventaParam?.usuarios) {
+            const ventaUsuarios = ventaParam.usuarios;
+            if (Array.isArray(ventaUsuarios)) {
+              for (const u of ventaUsuarios) {
+                const key = u?.id_usuario ?? u?.id;
+                if (key == null) continue;
+                const foundInAll = json.find(au => au.id_usuario === key || au.id === key);
+                initialPreselected.push(foundInAll || u);
+              }
+            } else if (typeof ventaUsuarios === 'object') {
+              const u = ventaUsuarios;
+              const key = u?.id_usuario ?? u?.id;
+              if (key != null) {
+                const foundInAll = json.find(au => au.id_usuario === key || au.id === key);
+                initialPreselected.push(foundInAll || u);
+              }
+            }
+          } else if (ventaParam?.nombre_usuario) {
+            // Fallback: intentar preseleccionar por nombre/id si no hay estructura usuarios
+            const found = json.find(u => (u.nombre_natural || u.nombre) === ventaParam.nombre_usuario || u.id_usuario === ventaParam?.id_usuario || u.id === ventaParam?.id);
+            if (found) initialPreselected.push(found);
+          }
+        } catch (err) {
+          console.error('Error extracting usuarios from ventaParam.usuarios', err);
+        }
+
+        // Eliminar duplicados por id_usuario / id y asignar al estado si hay alguno
+        if (initialPreselected.length > 0) {
+          const map = new Map();
+          initialPreselected.forEach(u => {
+            const key = u?.id_usuario ?? u?.id;
+            if (key != null && !map.has(String(key))) map.set(String(key), u);
+          });
+          const merged = Array.from(map.values());
+          if (merged.length > 0) setUsuariosPreseleccionados(merged);
         }
       } catch (err) {
+        console.error('Error fetching usuarios:', err);
         setUsuariosDisponibles([]);
         setUsuariosPreseleccionados([]);
       } finally {
@@ -120,6 +236,7 @@ export default function VentaModalScreen() {
   }, []);
 
   const handleChange = (field, value) => setVentaData(prev => ({ ...prev, [field]: value }));
+
 
   const computeRemaining = () => {
     const exist = selectedComerciable?.producto?.cantidad ?? selectedComerciable?.cantidad ?? ventaParam?.comerciable?.producto?.cantidad ?? ventaParam?.comerciable?.cantidad ?? 0;
@@ -149,7 +266,155 @@ export default function VentaModalScreen() {
     return `Error ${status}\n${errorMessage}`;
   };
 
+  function formatearNumero(num) {
+    const n = Number(num);
+    if (!isFinite(n) || isNaN(n)) return n;
+    const redondeado = Math.round(n * 100000) / 100000;
+    const str = redondeado.toString();
+    if (redondeado % 1 === 0) {
+      return redondeado;
+    }
+    return parseFloat(redondeado.toFixed(5).replace(/\.?0+$/, ''));
+  }
+
   const handleSave = async () => {
+    // Validaciones previas: comerciable obligatorio y al menos un usuario asignado
+    const idComerciableNow = ventaData.comerciable_id ?? ventaParam?.id_comerciable ?? ventaParam?.comerciable?.id_comerciable ?? ventaParam?.comerciable?.id ?? null;
+    if (!idComerciableNow || Number(idComerciableNow) === 0) {
+      ToastAndroid.show('Debe seleccionar un comerciable válido', ToastAndroid.LONG);
+      try {
+        const scrollNode = findNodeHandle(scrollRef.current);
+        const childNode = findNodeHandle(comerciableFieldRef.current);
+        if (childNode && scrollNode && UIManager && UIManager.measureLayout) {
+          UIManager.measureLayout(
+            childNode,
+            scrollNode,
+            () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); },
+            (left, top) => { scrollRef.current?.scrollTo({ y: Math.max(0, top - 20), animated: true }); }
+          );
+        } else {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      } catch (e) {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+      return;
+    }
+
+    // Validar cantidad y precio: no vacíos, cantidad > 0, precio >= 0
+    const cantidadRaw = ventaData.cantidad;
+    const precioRaw = ventaData.precio_cobrado_cup;
+    if (String(cantidadRaw).trim() === '') {
+      ToastAndroid.show('La cantidad no puede estar vacía', ToastAndroid.LONG);
+      try {
+        const scrollNode = findNodeHandle(scrollRef.current);
+        const childNode = findNodeHandle(cantidadFieldRef.current);
+        if (childNode && scrollNode && UIManager && UIManager.measureLayout) {
+          UIManager.measureLayout(
+            childNode,
+            scrollNode,
+            () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); },
+            (left, top) => { scrollRef.current?.scrollTo({ y: Math.max(0, top - 20), animated: true }); }
+          );
+        } else {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      } catch (e) {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+      return;
+    }
+
+    const cantidadNum = Number(cantidadRaw);
+    if (isNaN(cantidadNum) || cantidadNum <= 0) {
+      ToastAndroid.show('La cantidad debe ser un número mayor que 0', ToastAndroid.LONG);
+      try {
+        const scrollNode = findNodeHandle(scrollRef.current);
+        const childNode = findNodeHandle(cantidadFieldRef.current);
+        if (childNode && scrollNode && UIManager && UIManager.measureLayout) {
+          UIManager.measureLayout(
+            childNode,
+            scrollNode,
+            () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); },
+            (left, top) => { scrollRef.current?.scrollTo({ y: Math.max(0, top - 20), animated: true }); }
+          );
+        } else {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      } catch (e) {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+      return;
+    }
+
+    if (String(precioRaw).trim() === '') {
+      ToastAndroid.show('El precio no puede estar vacío', ToastAndroid.LONG);
+      try {
+        const scrollNode = findNodeHandle(scrollRef.current);
+        const childNode = findNodeHandle(precioFieldRef.current);
+        if (childNode && scrollNode && UIManager && UIManager.measureLayout) {
+          UIManager.measureLayout(
+            childNode,
+            scrollNode,
+            () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); },
+            (left, top) => { scrollRef.current?.scrollTo({ y: Math.max(0, top - 20), animated: true }); }
+          );
+        } else {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      } catch (e) {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+      return;
+    }
+
+    const precioNum = Number(precioRaw);
+    if (isNaN(precioNum) || precioNum < 0) {
+      ToastAndroid.show('El precio no puede ser negativo', ToastAndroid.LONG);
+      try {
+        const scrollNode = findNodeHandle(scrollRef.current);
+        const childNode = findNodeHandle(precioFieldRef.current);
+        if (childNode && scrollNode && UIManager && UIManager.measureLayout) {
+          UIManager.measureLayout(
+            childNode,
+            scrollNode,
+            () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); },
+            (left, top) => { scrollRef.current?.scrollTo({ y: Math.max(0, top - 20), animated: true }); }
+          );
+        } else {
+          scrollRef.current?.scrollTo({ y: 0, animated: true });
+        }
+      } catch (e) {
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+      return;
+    }
+
+    const selectedUsuariosNow = (usuariosListRef && usuariosListRef.current && typeof usuariosListRef.current.getItems === 'function')
+      ? usuariosListRef.current.getItems()
+      : (usuariosPreseleccionados && usuariosPreseleccionados.length ? usuariosPreseleccionados : (ventaParam?.usuarios ? (Array.isArray(ventaParam.usuarios) ? ventaParam.usuarios : [ventaParam.usuarios]) : []));
+
+    if (!selectedUsuariosNow || selectedUsuariosNow.length === 0) {
+      ToastAndroid.show('Debe asignar al menos un usuario a la venta', ToastAndroid.LONG);
+      try {
+        const scrollNode = findNodeHandle(scrollRef.current);
+        const childNode = findNodeHandle(usuariosFieldRef.current);
+        if (childNode && scrollNode && UIManager && UIManager.measureLayout) {
+          UIManager.measureLayout(
+            childNode,
+            scrollNode,
+            () => { scrollRef.current?.scrollTo({ y: 300, animated: true }); },
+            (left, top) => { scrollRef.current?.scrollTo({ y: Math.max(0, top - 20), animated: true }); }
+          );
+        } else {
+          scrollRef.current?.scrollTo({ y: 300, animated: true });
+        }
+      } catch (e) {
+        scrollRef.current?.scrollTo({ y: 300, animated: true });
+      }
+      return;
+    }
+
     try {
       const raw = await AsyncStorage.getItem('@config');
       if (!raw) { Alert.alert('Error', 'No se encontró configuración'); return; }
@@ -158,28 +423,57 @@ export default function VentaModalScreen() {
       const token = config.token;
       if (!host) { Alert.alert('Error', 'No se encontró host en la configuración'); return; }
 
+      // Construir payload con la estructura esperada por la API
+      const fechaIso = (() => {
+        try {
+          // ventaData.fecha puede ser YYYY-MM-DD o ya ISO
+          if (!ventaData.fecha) return new Date().toISOString();
+          // Si tiene formato YYYY-MM-DD, convertir a ISO conservando medianoche UTC
+          if (/^\d{4}-\d{2}-\d{2}$/.test(ventaData.fecha)) {
+            return new Date(`${ventaData.fecha}T00:00:00.000Z`).toISOString();
+          }
+          return new Date(ventaData.fecha).toISOString();
+        } catch (e) { return new Date().toISOString(); }
+      })();
+
+      const idCliente = ventaParam?.id_cliente ?? ventaData.id_cliente ?? null;
+      const idComerciable = ventaData.comerciable_id ?? ventaParam?.id_comerciable ?? ventaParam?.id_comerciable ?? null;
+
+      // Obtener lista de usuarios seleccionados preferentemente desde el ref del componente
+      const selectedUsuarios = (usuariosListRef && usuariosListRef.current && typeof usuariosListRef.current.getItems === 'function')
+        ? usuariosListRef.current.getItems()
+        : usuariosPreseleccionados;
+
+      const usuarioIds = (selectedUsuarios && selectedUsuarios.length)
+        ? selectedUsuarios.map(u => u.id_usuario ?? u.id).filter(Boolean)
+        : (ventaParam?.usuarios ? (Array.isArray(ventaParam.usuarios) ? ventaParam.usuarios.map(u => u.id_usuario ?? u.id).filter(Boolean) : [(ventaParam.usuarios.id_usuario ?? ventaParam.usuarios.id)]) : []);
+
       const payload = {
-        fecha: ventaData.fecha,
+        fecha: fechaIso,
+        precio_original_comerciable_cup: ventaData.precio_original_comerciable_cup ? Number(ventaData.precio_original_comerciable_cup) : (ventaParam?.precio_original_comerciable_cup ?? 0),
+        precio_original_comerciable_usd: ventaData.precio_original_comerciable_usd ? Number(ventaData.precio_original_comerciable_usd) : (ventaParam?.precio_original_comerciable_usd ?? 0),
+        costo_producto_cup: ventaData.costo_producto_cup ? Number(ventaData.costo_producto_cup) : (ventaParam?.costo_producto_cup ?? 0),
         cantidad: Number(ventaData.cantidad) || 0,
-        precio_cobrado_cup: ventaData.precio_cobrado_cup ? Number(ventaData.precio_cobrado_cup) : null,
-        precio_original_comerciable_cup: ventaData.precio_original_comerciable_cup ? Number(ventaData.precio_original_comerciable_cup) : null,
-        precio_original_comerciable_usd: ventaData.precio_original_comerciable_usd ? Number(ventaData.precio_original_comerciable_usd) : null,
-        forma_pago: ventaData.forma_pago,
-        tipo_comerciable: ventaData.tipo_comerciable,
-        comerciable_id: ventaData.comerciable_id,
-        nombre_cliente: ventaData.nombre_cliente,
-        nombre_usuario: ventaData.nombre_usuario,
-        nota: ventaData.nota
+        precio_cobrado_cup: ventaData.precio_cobrado_cup ? Number(ventaData.precio_cobrado_cup) : 0,
+        forma_pago: ventaData.forma_pago || 'Efectivo',
+        nota: ventaData.nota || '',
+        id_comerciable: idComerciable ?? 0,
+        id_usuario: usuarioIds
       };
 
+      // Incluir id_cliente solo si viene especificado y no es cadena vacía
+      if (idCliente !== null && idCliente !== undefined && String(idCliente).trim() !== '') {
+        payload.id_cliente = idCliente;
+      }
+      
       let url = '';
       let method = 'POST';
       if (mode === 'crear') {
-        url = `${host.replace(/\/+$/, '')}/venta/CreateVenta`;
+        url = `${host.replace(/\/+$/, '')}/venta/create`;
         method = 'POST';
       } else if (mode === 'editar') {
         if (!ventaData.id) { Alert.alert('Error', 'ID de venta inválido'); return; }
-        url = `${host.replace(/\/+$/, '')}/venta/UpdateVenta/${ventaData.id}`;
+        url = `${host.replace(/\/+$/, '')}/venta/update/${ventaData.id}`;
         method = 'PUT';
       } else {
         // view mode - nothing to do
@@ -213,9 +507,14 @@ export default function VentaModalScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={80}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+      enabled
+    >
       <TopBar />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <Image
@@ -228,37 +527,73 @@ export default function VentaModalScreen() {
           <View style={{ width: 44 }} />
         </View>
 
+
+
         <View style={styles.section}>
-          <View style={styles.field}>
-            <Text style={styles.label}>Comerciable</Text>
-            <ApiAutocomplete
-              endpoint="/comerciable/filter/5/1"
-              body={{ nombre: comerciableBusqueda, isProducto: true }}
-              displayFormat={(item) => `${item.producto?.nombre || item.nombre || ''} - ${item.producto?.categoria || item.categoria || ''}`}
-              onItemSelect={(item) => {
-                  setSelectedComerciable(item);
-                  setComercialeBusqueda('');
-                  if (!item) {
-                    // limpieza cuando se deselecciona
-                    handleChange('comerciable_display', '');
-                    handleChange('comerciable_id', null);
-                    handleChange('precio_original_comerciable_cup', '');
-                    handleChange('precio_original_comerciable_usd', '');
-                    handleChange('precio_cobrado_cup', '');
-                    return;
-                  }
-                  const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
-                  handleChange('comerciable_display', display);
-                  handleChange('comerciable_id', item.id_comerciable || item.id || null);
-                  handleChange('precio_original_comerciable_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
-                  handleChange('precio_original_comerciable_usd', item.precio_usd != null ? String(item.precio_usd) : (item.producto?.costo_usd ? String(item.producto.costo_usd) : ''));
-                  // Autocompletar precio cobrado con el precio por defecto del comerciable
-                  handleChange('precio_cobrado_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
-                }}
-              placeholder="Buscar producto o medicamento..."
-              delay={300}
-              initialValue={selectedComerciable}
-            />
+          <View style={styles.field} ref={comerciableFieldRef}>
+            <Text style={styles.label}>Comerciable *</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.s }}>
+              <View style={{ flex: 1 }}>
+                <ApiAutocomplete
+                  endpoint="/comerciable/filter/5/1"
+                  body={{ nombre: comerciableBusqueda, isProducto: true }}
+                  displayFormat={(item) => {
+                    const name = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
+                    const category = item.producto?.categoria || item.categoria || '';
+                    return category ? `${name} - ${category}` : name;
+                  }}
+                  onItemSelect={(item) => {
+                    setSelectedComerciable(item);
+                    setComercialeBusqueda('');
+                    if (!item) {
+                      // limpieza cuando se deselecciona
+                      handleChange('comerciable_display', '');
+                      handleChange('comerciable_id', null);
+                      handleChange('tipo_comerciable', '');
+                      handleChange('precio_original_comerciable_cup', '');
+                      handleChange('precio_original_comerciable_usd', '');
+                      handleChange('precio_cobrado_cup', '');
+                      return;
+                    }
+                    const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
+                    handleChange('comerciable_display', display);
+                    handleChange('comerciable_id', item.id_comerciable || item.id || null);
+                    handleChange('precio_original_comerciable_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+                    handleChange('precio_original_comerciable_usd', item.precio_usd != null ? String(item.precio_usd) : (item.producto?.costo_usd ? String(item.producto.costo_usd) : ''));
+                    // Determinar tipo de comerciable según la estructura del item
+                    try {
+                      let tipo = '';
+                      if (item.producto) {
+                        const isMedicamento = Boolean(item.producto.medicamento || item.producto.isMedicamento || item.producto.tipo === 'medicamento');
+                        tipo = isMedicamento ? 'medicamento' : 'producto';
+                      } else if (item.servicio) {
+                        tipo = 'servicio';
+                      } else if (item.tipo) {
+                        tipo = item.tipo;
+                      }
+                      handleChange('tipo_comerciable', tipo);
+                    } catch (e) {
+                      handleChange('tipo_comerciable', '');
+                    }
+                    // Autocompletar precio cobrado con el precio por defecto del comerciable
+                    try {
+                      const rawPrice = item.precio_cup != null ? Number(item.precio_cup) : (item.producto?.costo_cup ? Number(item.producto.costo_cup) : null);
+                      const descuento = Number(ventaParam?.descuento) || 0;
+                      const finalPrice = (rawPrice != null && descuento > 0) ? (rawPrice * (1 - descuento / 100)) : rawPrice;
+                      handleChange('precio_cobrado_cup', finalPrice != null ? String(formatearNumero(finalPrice)) : '');
+                    } catch (e) {
+                      handleChange('precio_cobrado_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+                    }
+                  }}
+                  placeholder="Buscar producto o medicamento..."
+                  delay={300}
+                  initialValue={selectedComerciable}
+                />
+              </View>
+              <TouchableOpacity style={styles.cameraButton} onPress={() => setShowScannerModal(true)}>
+                <Image source={require('../assets/images/camera.png')} style={styles.cameraIcon} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.infoBox}>
@@ -267,17 +602,47 @@ export default function VentaModalScreen() {
               <Text style={styles.infoText}>{`CUP: ${ventaData.precio_original_comerciable_cup || '-'}  •  USD: ${ventaData.precio_original_comerciable_usd || '-'}`}</Text>
               <Text style={styles.infoText}>{`Cant despues de la venta: ${computeRemaining()}`}</Text>
             </View>
+            <View style={{ marginTop: Spacing.s }}>
+              <Text style={styles.infoText}>{`Tipo comerciable: ${ventaData.tipo_comerciable || ventaParam?.tipo_comerciable || '-'}`}</Text>
+            </View>
+            {(mode === 'ver' || mode === 'editar') && Number(ventaParam?.descuento) > 0 && (
+              <View style={{ marginTop: Spacing.s }}>
+                {(() => {
+                  const d = Number(ventaParam?.descuento) || 0;
+                  const origCup = parseFloat(ventaData.precio_original_comerciable_cup || '0') || 0;
+                  const origUsd = parseFloat(ventaData.precio_original_comerciable_usd || '0') || 0;
+                  const discCup = (origCup * (1 - d / 100));
+                  const discUsd = (origUsd * (1 - d / 100));
+                  return (
+                    <Text style={[styles.infoText, { color: Colors.success, fontWeight: '700' }]}>{`Con descuento (${d}%): CUP: ${isNaN(discCup) ? '-' : formatearNumero(discCup)}  •  USD: ${isNaN(discUsd) ? '-' : formatearNumero(discUsd)}`}</Text>
+                  );
+                })()}
+              </View>
+            )}
           </View>
 
+          {(mode === 'ver' || mode === 'editar') && ventaParam?.consultum && (
+            <View style={styles.consultContainer}>
+              <Text style={styles.consultText}>
+                {`Esta venta está ligada a una consulta del paciente ${ventaParam.consultum?.paciente?.nombre || 'N/A'} por el motivo ${ventaParam.consultum?.motivo || 'N/A'}`}
+              </Text>
+            </View>
+          )}
+
           <View style={styles.row}>
-            <View style={[styles.field, { flex: 1, marginRight: Spacing.s }]}>
-              <Text style={styles.label}>Cantidad</Text>
+            <View style={[styles.field, { flex: 1, marginRight: Spacing.s }]} ref={cantidadFieldRef}>
+              <Text style={styles.label}>Cantidad *</Text>
               <TextInput style={styles.input} keyboardType="numeric" value={ventaData.cantidad} onChangeText={(t) => handleChange('cantidad', t)} editable={isEditable} />
             </View>
 
-            <View style={[styles.field, { flex: 1 }, styles.rowBetween] }>
+            <View style={[styles.field, { flex: 1 }, styles.rowBetween]} ref={precioFieldRef}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Precio cobrado (CUP)</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>Precio (CUP) *</Text>
+                  {(mode === 'ver' || mode === 'editar') && Number(ventaParam?.descuento) > 0 && (
+                    <Text style={{ color: Colors.success, fontWeight: '700' }}>{`${ventaParam.descuento}%`}</Text>
+                  )}
+                </View>
                 <TextInput style={styles.input} keyboardType="numeric" value={ventaData.precio_cobrado_cup} onChangeText={(t) => handleChange('precio_cobrado_cup', t)} editable={isEditable} />
               </View>
             </View>
@@ -290,7 +655,7 @@ export default function VentaModalScreen() {
                   const price = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
                   const qty = parseFloat(ventaData.cantidad || '0') || 0;
                   const total = price * qty;
-                  return isNaN(total) ? '0.00' : total.toFixed(2);
+                  return isNaN(total) ? '0.00' : String(formatearNumero(total));
                 })()}`}
               </Text>
 
@@ -301,7 +666,7 @@ export default function VentaModalScreen() {
                   const original = parseFloat(ventaData.precio_original_comerciable_cup || '0') || 0;
                   const plusVal = (price * qty) - (original * qty);
                   const plus = isNaN(plusVal) ? 0 : Math.max(0, plusVal);
-                  return plus.toFixed(2);
+                  return String(formatearNumero(plus));
                 })()}`}
               </Text>
             </View>
@@ -323,31 +688,76 @@ export default function VentaModalScreen() {
               )}
             </View>
 
-            <View style={[styles.field, { flex: 1 }]}>
-              <Text style={styles.label}>Tipo comerciable</Text>
-              <DropdownGenerico data={tipoComerciableOptions} value={tipoComerciableOptions.find(x => x.nombre === ventaData.tipo_comerciable) || null} onValueChange={(v) => handleChange('tipo_comerciable', v?.nombre || '')} placeholder="Seleccionar" displayKey="nombre" searchKey="nombre" searchable={false} requiresSelection={false} disabled={!isEditable} />
-            </View>
+            {/* Tipo comerciable mostrado en el recuadro de información arriba */}
           </View>
 
           <View style={styles.row}>
-            <View style={[styles.field, { flex: 1, marginRight: Spacing.s }]}>
-              <Text style={styles.label}>Forma de pago</Text>
-              <DropdownGenerico data={formaPagoOptions} value={formaPagoOptions.find(x => x.nombre === ventaData.forma_pago) || null} onValueChange={(v) => handleChange('forma_pago', v?.nombre || '')} placeholder="Seleccionar" displayKey="nombre" searchKey="nombre" searchable={false} requiresSelection={false} disabled={!isEditable} />
-            </View>
-
             <View style={[styles.field, { flex: 1 }]}>
               <Text style={styles.label}>Cliente</Text>
-              <TextInput style={styles.input} value={ventaData.nombre_cliente} onChangeText={(t) => handleChange('nombre_cliente', t)} editable={isEditable} placeholder="Nombre cliente" />
+              <ApiAutocomplete
+                endpoint="/cliente/filter/5/1"
+                body={{ nombre: clienteBusqueda }}
+                displayFormat={(item) => {
+                  const name = item.nombre || '';
+                  const phone = item.telefono || item.telefono_contacto || '';
+                  return phone ? `${name} - ${phone}` : name;
+                }}
+                onItemSelect={(item) => {
+                  setSelectedCliente(item);
+                  setClienteBusqueda('');
+                  if (!item) {
+                    handleChange('id_cliente', null);
+                    handleChange('nombre_cliente', '');
+                    return;
+                  }
+                  handleChange('id_cliente', item.id_cliente ?? item.id ?? null);
+                  handleChange('nombre_cliente', item.nombre || '');
+                }}
+                placeholder="Buscar cliente..."
+                delay={300}
+                initialValue={selectedCliente}
+              />
             </View>
           </View>
 
-          <View style={styles.field}>
+          <View style={[styles.field, { flex: 1, marginRight: Spacing.s }]}>
+            <View style={styles.paymentContainer}>
+              <Text style={[styles.label, { marginBottom: 8 }]}>Forma de pago</Text>
+              <View style={styles.radioRow}>
+                <TouchableOpacity
+                  style={styles.radioOption}
+                  onPress={() => isEditable && handleChange('forma_pago', 'Efectivo')}
+                  disabled={!isEditable}
+                >
+                  <View style={styles.radioCircle}>
+                    {ventaData.forma_pago === 'Efectivo' && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={styles.radioLabel}>Efectivo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.radioOption}
+                  onPress={() => isEditable && handleChange('forma_pago', 'Transferencia')}
+                  disabled={!isEditable}
+                >
+                  <View style={styles.radioCircle}>
+                    {ventaData.forma_pago === 'Transferencia' && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={styles.radioLabel}>Transferencia</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.field} ref={usuariosFieldRef}>
             <UsuariosLista
+              ref={usuariosListRef}
               data={usuariosDisponibles}
               initialSelected={usuariosPreseleccionados}
               isEditable={isEditable}
               onChange={(p) => {
                 const items = p?.items || [];
+                // No actualizar `usuariosPreseleccionados` desde onChange para evitar loops.
                 const first = items.length > 0 ? (items[0].nombre_natural || items[0].nombre || '') : '';
                 handleChange('nombre_usuario', first);
               }}
@@ -365,11 +775,84 @@ export default function VentaModalScreen() {
             <Text style={styles.saveButtonText}>{mode === 'crear' ? 'Crear Venta' : 'Guardar cambios'}</Text>
           </TouchableOpacity>
         )}
-
-        <TouchableOpacity onPress={() => router.back()} style={[styles.saveButton, { backgroundColor: Colors.primaryClaro, marginTop: Spacing.s }]}>
-          <Text style={[styles.saveButtonText, { color: Colors.textSecondary }]}>Cerrar</Text>
-        </TouchableOpacity>
       </ScrollView>
+        <QRScannerModal
+          visible={showScannerModal}
+          onClose={() => setShowScannerModal(false)}
+          onCodeScanned={async (code) => {
+            try {
+              const raw = await AsyncStorage.getItem('@config');
+              if (!raw) { Alert.alert('Error', 'No se encontró configuración'); setShowScannerModal(false); return; }
+              const config = JSON.parse(raw);
+              const host = config.api_host || config.apihost || config.apiHost;
+              const token = config.token;
+              if (!host) { Alert.alert('Error', 'No se encontró host en la configuración'); setShowScannerModal(false); return; }
+console.log("Codigo escanead: ",String(code));
+
+              const url = `${host.replace(/\/+$/, '')}/producto/filter/1/1`;
+              const res = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ codigo: String(code) })
+              });
+
+              let responseData = null;
+              try { responseData = await res.json(); } catch (e) { responseData = null; }
+              if (!res.ok || !responseData) {
+                Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
+                setShowScannerModal(false);
+                return;
+              }
+
+              const item = (responseData.data && responseData.data.length > 0) ? responseData.data[0] : null;
+              if (!item) {
+                Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
+                setShowScannerModal(false);
+                return;
+              }
+
+              // Simular la selección del item en el Autocomplete
+              setSelectedComerciable(item);
+              setComercialeBusqueda('');
+              const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
+              handleChange('comerciable_display', display);
+              handleChange('comerciable_id', item.id_comerciable || item.id || null);
+              handleChange('precio_original_comerciable_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+              handleChange('precio_original_comerciable_usd', item.precio_usd != null ? String(item.precio_usd) : (item.producto?.costo_usd ? String(item.producto.costo_usd) : ''));
+              try {
+                let tipo = '';
+                if (item.producto) {
+                  const isMedicamento = Boolean(item.producto.medicamento || item.producto.isMedicamento || item.producto.tipo === 'medicamento');
+                  tipo = isMedicamento ? 'medicamento' : 'producto';
+                } else if (item.servicio) {
+                  tipo = 'servicio';
+                } else if (item.tipo) {
+                  tipo = item.tipo;
+                }
+                handleChange('tipo_comerciable', tipo);
+              } catch (e) {
+                handleChange('tipo_comerciable', '');
+              }
+              try {
+                const rawPrice = item.precio_cup != null ? Number(item.precio_cup) : (item.producto?.costo_cup ? Number(item.producto.costo_cup) : null);
+                const descuento = Number(ventaParam?.descuento) || 0;
+                const finalPrice = (rawPrice != null && descuento > 0) ? (rawPrice * (1 - descuento / 100)) : rawPrice;
+                handleChange('precio_cobrado_cup', finalPrice != null ? String(formatearNumero(finalPrice)) : '');
+              } catch (e) {
+                handleChange('precio_cobrado_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+              }
+
+              setShowScannerModal(false);
+            } catch (err) {
+              console.error('Error buscando por código:', err);
+              Alert.alert('Error', 'No se pudo buscar el código');
+              setShowScannerModal(false);
+            }
+          }}
+        />
     </KeyboardAvoidingView>
   );
 }
@@ -436,6 +919,48 @@ const styles = StyleSheet.create({
   },
   inputText: { color: Colors.textSecondary },
   row: { flexDirection: 'row', gap: Spacing.s },
+  paymentContainer: {
+    marginTop: Spacing.m,
+    paddingTop: Spacing.s,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+  },
+  radioRow: {
+    flexDirection: 'row',
+    gap: Spacing.m,
+    marginTop: Spacing.xs,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.s,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.s,
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  radioLabel: {
+    fontSize: Typography.body,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
   saveButton: {
     backgroundColor: Colors.boton_azul,
     paddingVertical: Spacing.m,
@@ -461,5 +986,33 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     tintColor: Colors.textPrimary,
+  },
+  consultContainer: {
+    backgroundColor: '#fff9e6',
+    padding: Spacing.m,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f0dca6',
+    marginBottom: Spacing.m,
+  },
+  consultText: {
+    fontSize: Typography.body,
+    color: Colors.textSecondary,
+  },
+  cameraButton: {
+    backgroundColor: Colors.boton_azul,
+    borderRadius: 8,
+    padding: Spacing.s,
+    height: 44,
+    width: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  cameraIcon: {
+    width: 24,
+    height: 24,
+    tintColor: '#fff',
   },
 });

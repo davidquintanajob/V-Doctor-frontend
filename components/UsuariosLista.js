@@ -61,7 +61,7 @@ const UsuariosLista = forwardRef(({ data = [], initialSelected = [], isEditable 
 
     return (
         <View style={styles.container}>
-            <Text style={styles.label}>Usuarios asignados</Text>
+            <Text style={styles.label}>Usuarios asignados *</Text>
             <DropdownGenerico
                 data={availableOptions}
                 displayKey="nombre_natural"

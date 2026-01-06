@@ -549,6 +549,8 @@ export default function ProductoModalScreen() {
                     onCodeScanned={(code) => {
                         try {
                             setProductoData(prev => ({ ...prev, codigo: String(code) }));
+                            // Mark that the code was modified so it will be sent in editar mode
+                            try { setCodigoModified(true); } catch (e) { /* ignore */ }
                         } catch (e) {
                             console.log('Error setting scanned code:', e);
                         }

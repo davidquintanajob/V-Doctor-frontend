@@ -31,9 +31,11 @@ export default function VentasScreen() {
     const [descripcion_servicio, setDescripcionServicio] = useState('');
 
     // filtros adicionales
+    const todayIso = new Date().toISOString();
+
     const [filters, setFilters] = useState({
-        fecha_desde: '',
-        fecha_hasta: '',
+        fecha_desde: todayIso,
+        fecha_hasta: todayIso,
         precio_original_comerciable_cup_min: '',
         precio_original_comerciable_cup_max: '',
         precio_original_comerciable_usd_min: '',
@@ -93,8 +95,8 @@ export default function VentasScreen() {
             const url = `${host.replace(/\/+$/, '')}/venta/Filter/${itemsPerPage}/${page}`;
 
             const body = {
-                ...(fechaSafe(filters.fecha_desde) && { fecha_desde: filters.fecha_desde }),
-                ...(fechaSafe(filters.fecha_hasta) && { fecha_hasta: filters.fecha_hasta }),
+                ...(fechaSafe(filters.fecha_desde) && { fecha_desde: formatDateOnly(filters.fecha_desde) }),
+                ...(fechaSafe(filters.fecha_hasta) && { fecha_hasta: formatDateOnly(filters.fecha_hasta) }),
                 ...(nombre_producto && { nombre_producto }),
                 ...(descripcion_servicio && { descripcion_servicio }),
                 ...(filters.precio_original_comerciable_cup_min !== '' && { precio_original_comerciable_cup_min: Number(filters.precio_original_comerciable_cup_min) }),
@@ -112,7 +114,7 @@ export default function VentasScreen() {
                 ...(formaPago?.nombre && { forma_pago: formaPago.nombre }),
                 ...(tipoComerciable?.nombre && { tipo_comerciable: tipoComerciable.nombre })
             };
-
+            
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -159,6 +161,20 @@ export default function VentasScreen() {
         return v !== null && v !== undefined && v !== '';
     };
 
+    const formatDateOnly = (iso) => {
+        if (!iso) return '';
+        try {
+            const d = new Date(iso);
+            if (isNaN(d)) return '';
+            const year = d.getUTCFullYear();
+            const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(d.getUTCDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        } catch (e) {
+            return '';
+        }
+    };
+
     const handleSearch = () => {
         setCurrentPage(1);
         fetchVentas(1);
@@ -185,8 +201,8 @@ export default function VentasScreen() {
         setNombreProducto('');
         setDescripcionServicio('');
         setFilters({
-            fecha_desde: '',
-            fecha_hasta: '',
+            fecha_desde: todayIso,
+            fecha_hasta: todayIso,
             precio_original_comerciable_cup_min: '',
             precio_original_comerciable_cup_max: '',
             precio_original_comerciable_usd_min: '',
@@ -214,13 +230,33 @@ export default function VentasScreen() {
         router.push({ pathname: '/ventaModal', params: { mode: 'ver', venta: JSON.stringify(venta) } });
     };
 
+    const formatDateUTC = (value) => {
+        if (!value) return '';
+        try {
+            const d = new Date(value);
+            if (isNaN(d)) return '';
+            try {
+                // Prefer locale formatting but force UTC timezone to avoid local offset
+                return d.toLocaleDateString(undefined, { timeZone: 'UTC' });
+            } catch (e) {
+                // Fallback to manual UTC components
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const year = d.getUTCFullYear();
+                return `${day}/${month}/${year}`;
+            }
+        } catch (e) {
+            return '';
+        }
+    };
+
     const columns = [
         {
             key: 'fecha',
             label: 'Fecha',
             width: 120,
             cellRenderer: (value, item) => (
-                <Text style={styles.cellText}>{value ? new Date(value).toLocaleDateString() : ''}</Text>
+                <Text style={styles.cellText}>{formatDateUTC(value)}</Text>
             )
         },
         {
@@ -242,7 +278,7 @@ export default function VentasScreen() {
             key: 'precio_cobrado_cup',
             label: 'Precio',
             width: 100,
-            cellRenderer: (value, item) => (<Text style={styles.cellText}>{item.precio_cobrado_cup ?? 0}</Text>)
+            cellRenderer: (value, item) => (<Text style={styles.cellText}>{(item.precio_cobrado_cup - (item.precio_cobrado_cup * item.descuento / 100)) || 0}</Text>)
         },
         {
             key: 'total',
@@ -250,7 +286,7 @@ export default function VentasScreen() {
             width: 100,
             cellRenderer: (value, item) => {
                 const cantidad = Number(item.cantidad || 0);
-                const precio = Number(item.precio_cobrado_cup || 0);
+                const precio = Number((item.precio_cobrado_cup - (item.precio_cobrado_cup * item.descuento / 100)) || 0);
                 return <Text style={styles.cellText}>{cantidad * precio}</Text>;
             }
         },
@@ -272,6 +308,16 @@ export default function VentasScreen() {
                 return <Text style={styles.cellText}>{plus > 0 ? plus : 0}</Text>;
             }
         }
+        ,
+        {
+            key: 'usuarios_count',
+            label: 'Usuarios',
+            width: 80,
+            cellRenderer: (value, item) => {
+                const count = Array.isArray(item.usuarios) ? item.usuarios.length : (item.usuarios ? 1 : 0);
+                return <Text style={styles.cellText}>{count}</Text>;
+            }
+        }
     ];
 
     const actions = [
@@ -284,7 +330,9 @@ export default function VentasScreen() {
         },
         {
             handler: (venta) => {
-                Alert.alert('Confirmar eliminación', `¿Eliminar venta ${venta.id_venta || venta.id}?`, [
+                const itemLabel = venta?.comerciable?.producto?.nombre ?? venta?.comerciable?.servicio?.descripcion ?? '';
+                const message = itemLabel ? `¿Eliminar venta ${itemLabel}?` : '¿Eliminar venta?';
+                Alert.alert('Confirmar eliminación', message, [
                     { text: 'Cancelar', style: 'cancel' },
                     { text: 'Eliminar', style: 'destructive', onPress: async () => {
                         try {
@@ -379,14 +427,14 @@ export default function VentasScreen() {
                                 <View style={[styles.inputGroup, styles.responsiveInputGroup]}>
                                     <Text style={styles.inputLabel}>Fecha desde</Text>
                                     <TouchableOpacity style={styles.searchInput} onPress={() => { setDatePickerField('fecha_desde'); setShowDatePicker(true); }}>
-                                        <Text style={{ color: filters.fecha_desde ? Colors.textSecondary : '#999' }}>{filters.fecha_desde ? new Date(filters.fecha_desde).toLocaleString() : 'Seleccionar fecha'}</Text>
+                                        <Text style={{ color: filters.fecha_desde ? Colors.textSecondary : '#999' }}>{filters.fecha_desde ? formatDateUTC(filters.fecha_desde) : 'Seleccionar fecha'}</Text>
                                     </TouchableOpacity>
                                 </View>
 
                                 <View style={[styles.inputGroup, styles.responsiveInputGroup]}>
                                     <Text style={styles.inputLabel}>Fecha hasta</Text>
                                     <TouchableOpacity style={styles.searchInput} onPress={() => { setDatePickerField('fecha_hasta'); setShowDatePicker(true); }}>
-                                        <Text style={{ color: filters.fecha_hasta ? Colors.textSecondary : '#999' }}>{filters.fecha_hasta ? new Date(filters.fecha_hasta).toLocaleString() : 'Seleccionar fecha'}</Text>
+                                        <Text style={{ color: filters.fecha_hasta ? Colors.textSecondary : '#999' }}>{filters.fecha_hasta ? formatDateUTC(filters.fecha_hasta) : 'Seleccionar fecha'}</Text>
                                     </TouchableOpacity>
                                 </View>
 
