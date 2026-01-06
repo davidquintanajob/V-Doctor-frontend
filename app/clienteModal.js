@@ -83,8 +83,8 @@ export default function ClienteModalScreen() {
 
     // Datos de Sexo para el Dropdown
     const sexos = [
-        { id: 1, nombre: 'masculino' },
-        { id: 2, nombre: 'femenino' },
+        { id: 1, nombre: 'macho' },
+        { id: 2, nombre: 'hembra' },
         { id: 3, nombre: 'otros' }
     ];
     // Datos de Especies para el Dropdown
