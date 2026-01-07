@@ -24,6 +24,14 @@ export default function QRScannerModal({ visible, onClose, onCodeScanned }) {
         }
     }, [visible, permission]);
 
+    // Reset scanned state whenever the modal becomes visible so it's ready to scan
+    useEffect(() => {
+        if (visible) {
+            setScanned(false);
+            setManualCode('');
+        }
+    }, [visible]);
+
     const handleBarCodeScanned = ({ data }) => {
         if (!scanned) {
             setScanned(true);
