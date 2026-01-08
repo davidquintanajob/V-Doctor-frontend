@@ -196,8 +196,8 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
 
             <div class="sales-header">
                 <div class="header-name">Nombre</div>
-                <div class="header-qty">Cantidad</div>
                 <div class="header-nota">Nota</div>
+                <div class="header-qty">Cantidad</div>
             </div>
             <div class="sales-section">
                 ${ventas.map((v, index) => {
@@ -209,8 +209,8 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
             const nota = ventaNotas[key] || '';
             return `<div class="sales-item">
                         <div class="item-name">${escapeHtml(label)}</div>
-                        <div class="item-qty">${escapeHtml(String(v.cantidad || '1'))}</div>
                         <div class="item-nota">${escapeHtml(nota)}</div>
+                        <div class="item-qty">${escapeHtml(String(v.cantidad || '1'))}</div>
                     </div>`;
         }).join('')}
                 
