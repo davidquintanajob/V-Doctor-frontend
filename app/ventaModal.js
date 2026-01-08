@@ -170,19 +170,22 @@ export default function VentaModalScreen() {
         const initialPreselected = [];
 
         // Revisar config de usuario para preseleccionar si aplica
-        try {
-          let rawUserCfg = await AsyncStorage.getItem('@config.userConfig');
-          if (!rawUserCfg) rawUserCfg = await AsyncStorage.getItem('@config');
-          if (rawUserCfg) {
-            const userCfg = JSON.parse(rawUserCfg);
-            const currentId = userCfg?.usuario?.id_usuario || userCfg?.usuario?.idUsuario || null;
-            if (currentId) {
-              const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
-              if (found) initialPreselected.push(found);
+        // Nota: solo preseleccionamos el usuario de config cuando el modal está en modo 'crear'.
+        if (mode === 'crear') {
+          try {
+            let rawUserCfg = await AsyncStorage.getItem('@config.userConfig');
+            if (!rawUserCfg) rawUserCfg = await AsyncStorage.getItem('@config');
+            if (rawUserCfg) {
+              const userCfg = JSON.parse(rawUserCfg);
+              const currentId = userCfg?.usuario?.id_usuario || userCfg?.usuario?.idUsuario || null;
+              if (currentId) {
+                const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
+                if (found) initialPreselected.push(found);
+              }
             }
+          } catch (err) {
+            console.error('Error reading config from AsyncStorage', err);
           }
-        } catch (err) {
-          console.error('Error reading config from AsyncStorage', err);
         }
 
         // Si la venta trae usuarios, agregarlos a la preselección (sin duplicados)

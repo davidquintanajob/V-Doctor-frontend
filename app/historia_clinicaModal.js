@@ -507,22 +507,25 @@ export default function HistoriaClinicaModalScreen() {
                 const initialPreselected = [];
 
                 // Revisar config de usuario para preseleccionar si aplica
-                try {
-                    // Try both keys: older code may have stored @config.userConfig, but login stores @config
-                    let rawUserCfg = await AsyncStorage.getItem('@config.userConfig');
-                    if (!rawUserCfg) rawUserCfg = await AsyncStorage.getItem('@config');
-                    if (rawUserCfg) {
-                        const userCfg = JSON.parse(rawUserCfg);
-                        const currentId = userCfg?.usuario?.id_usuario || userCfg?.usuario?.idUsuario || null;
-                        if (currentId) {
-                            const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
-                            if (found) {
-                                initialPreselected.push(found);
+                // Solo preseleccionar el usuario desde la config si estamos creando una nueva entidad
+                if (mode === 'crear') {
+                    try {
+                        // Try both keys: older code may have stored @config.userConfig, but login stores @config
+                        let rawUserCfg = await AsyncStorage.getItem('@config.userConfig');
+                        if (!rawUserCfg) rawUserCfg = await AsyncStorage.getItem('@config');
+                        if (rawUserCfg) {
+                            const userCfg = JSON.parse(rawUserCfg);
+                            const currentId = userCfg?.usuario?.id_usuario || userCfg?.usuario?.idUsuario || null;
+                            if (currentId) {
+                                const found = json.find(u => u.id_usuario === currentId || u.id === currentId);
+                                if (found) {
+                                    initialPreselected.push(found);
+                                }
                             }
                         }
+                    } catch (err) {
+                        console.error('Error reading config from AsyncStorage', err);
                     }
-                } catch (err) {
-                    console.error('Error reading config from AsyncStorage', err);
                 }
 
                 // Si el modal recibió una consulta con ventas, extraer todos los usuarios de todas las ventas

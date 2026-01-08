@@ -31,11 +31,11 @@ export default function VentasScreen() {
     const [descripcion_servicio, setDescripcionServicio] = useState('');
 
     // filtros adicionales
-    const todayIso = new Date().toISOString();
+    const todayIso = '';
 
     const [filters, setFilters] = useState({
-        fecha_desde: todayIso,
-        fecha_hasta: todayIso,
+        fecha_desde: '',
+        fecha_hasta: '',
         precio_original_comerciable_cup_min: '',
         precio_original_comerciable_cup_max: '',
         precio_original_comerciable_usd_min: '',
@@ -201,8 +201,8 @@ export default function VentasScreen() {
         setNombreProducto('');
         setDescripcionServicio('');
         setFilters({
-            fecha_desde: todayIso,
-            fecha_hasta: todayIso,
+            fecha_desde: '',
+            fecha_hasta: '',
             precio_original_comerciable_cup_min: '',
             precio_original_comerciable_cup_max: '',
             precio_original_comerciable_usd_min: '',
