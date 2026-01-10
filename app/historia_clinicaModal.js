@@ -114,6 +114,9 @@ export default function HistoriaClinicaModalScreen() {
     const [initialAntiparasitarios, setInitialAntiparasitarios] = useState([]);
     const [initialServicios, setInitialServicios] = useState([]);
     const [initialProductos, setInitialProductos] = useState([]);
+    // Configuración de redondeo (desde AsyncStorage @redondeoConfig)
+    const [redondeoValue, setRedondeoValue] = useState(null);
+    const [isRedondeoFromPlus, setIsRedondeoFromPlus] = useState(false);
 
     // Refs para las listas
     const vacunasListRef = React.useRef(null);
@@ -122,6 +125,7 @@ export default function HistoriaClinicaModalScreen() {
     const productosListRef = React.useRef(null);
     const serviciosListRef = React.useRef(null);
     const usuariosListRef = React.useRef(null);
+    const exedenteRoundedRef = React.useRef(0);
 
     // Scroll + posiciones para validación y scroll automático
     const scrollRef = React.useRef(null);
@@ -370,6 +374,18 @@ export default function HistoriaClinicaModalScreen() {
                 } catch (e) {
                     console.log('Error reading @CambioMoneda:', e);
                 }
+                // Cargar configuración de redondeo si existe
+                try {
+                    const redRaw = await AsyncStorage.getItem('@redondeoConfig');
+                    if (redRaw) {
+                        const redCfg = JSON.parse(redRaw);
+                        // .value puede ser por ejemplo 'Normal', 'Exeso 5', etc.
+                        setRedondeoValue(redCfg?.value ?? null);
+                        setIsRedondeoFromPlus(!!redCfg?.isRedondeoFromPlus);
+                    }
+                } catch (e) {
+                    console.log('Error reading @redondeoConfig:', e);
+                }
             } catch (error) {
                 console.error('Error getting config:', error);
             }
@@ -405,6 +421,7 @@ export default function HistoriaClinicaModalScreen() {
                         precio_cup: venta.precio_cobrado_cup?.toString() || '',
                         cantidad: venta.cantidad?.toString() || '1',
                         nota_list: venta.nota || "",
+                        exedente_redondeo: venta.exedente_redondeo || 0,
                         costo_producto_cup: venta.costo_producto_cup,
                         precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
                         precio_original_comerciable_usd: (venta.precio_original_comerciable_usd != null) ? String(venta.precio_original_comerciable_usd) : (venta.costo_producto_usd != null ? String(venta.costo_producto_usd) : undefined)
@@ -427,6 +444,7 @@ export default function HistoriaClinicaModalScreen() {
                             posologia: medicamento.posologia || '',
                             precio_cup: venta.precio_cobrado_cup?.toString() || '',
                             cantidad: venta.cantidad?.toString() || '1',
+                            exedente_redondeo: venta.exedente_redondeo || 0,
                             costo_producto_cup: venta.costo_producto_cup,
                             nota_list: venta.nota || "",
                             precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
@@ -458,6 +476,7 @@ export default function HistoriaClinicaModalScreen() {
                             // cantidad vendida
                             cantidad: venta.cantidad?.toString() || '1',
                             nota_list: venta.nota || "",
+                            exedente_redondeo: venta.exedente_redondeo || 0,
                             costo_producto_cup: venta.costo_producto_cup,
                             // precio original del comerciable (necesario para calcular el plus)
                             precio_original_comerciable_cup: (venta.precio_original_comerciable_cup != null) ? String(venta.precio_original_comerciable_cup) : (venta.costo_producto_cup != null ? String(venta.costo_producto_cup) : undefined),
@@ -1110,6 +1129,11 @@ export default function HistoriaClinicaModalScreen() {
             allSelectedItems.forEach(({ item, itemTotal }) => {
                 const porcentaje = (itemTotal / totalCobrar) * 100;
                 item.partePorcientoTotalSuma = parseFloat(porcentaje);
+                // Cuando estamos creando la consulta, inicializamos exedente_redondeo en 0
+                // En modo 'editar' o 'ver' este valor debería venir cargado desde las ventas
+                if (mode === 'crear') {
+                    item.exedente_redondeo = ((parseFloat(porcentaje) / 100) * exedenteRoundedRef.current) || 0;
+                }
             });
         }
 
@@ -1617,6 +1641,7 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: 0, // Los servicios no tienen costo de producto
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
+                    exedente_redondeo: entry.exedente_redondeo || 0,
                     descuento: pacienteParam.descuento || 0,
                     precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
@@ -1636,6 +1661,7 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: parseFloat(producto.costo_cup || producto.costo_producto_cup || 0) || 0,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
+                    exedente_redondeo: entry.exedente_redondeo || 0,
                     descuento: pacienteParam.descuento || 0,
                     precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
@@ -1655,6 +1681,7 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: parseFloat(producto.costo_cup || 0) || 0,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
+                    exedente_redondeo: entry.exedente_redondeo || 0,
                     descuento: pacienteParam.descuento || 0,
                     precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
@@ -1974,6 +2001,19 @@ export default function HistoriaClinicaModalScreen() {
                 const sel = entry.selected || {};
                 let producto = sel.producto || sel || {};
 
+                // Construir el payload según el tipo de venta
+                let precioAux = 0;
+
+                //console.log("Supuesta cantidad del usuario: ",userTotals.totalCobrar);
+                //console.log("Total original: ",totalCobrar);
+                //console.log(`Resultado de esta venta referente ${entry.partePorcientoTotalSuma}% :`, (((entry.partePorcientoTotalSuma) * (userTotals.totalCobrar)) / 100) / (entry.cantidad));
+                //parseFloat(entry.precio_cup || 0) || 0
+
+                if (userTotals.totalCobrar === null) {
+                    precioAux = parseFloat(entry.precio_cup || 0) || 0;
+                } else {
+                    precioAux = ((entry.partePorcientoTotalSuma * userTotals.totalCobrar) / 100) / (entry.cantidad || 1);
+                }
                 return {
                     fecha: entry.fecha || new Date(consultaData.fecha).toISOString(),
                     id_venta: entry.id_venta || null,
@@ -1982,8 +2022,9 @@ export default function HistoriaClinicaModalScreen() {
                     costo_producto_cup: entry.costo_producto_cup,
                     cantidad: parseFloat(entry.cantidad || 0) || 0,
                     nota: entry.nota_list || "",
-                    descuento: pacienteParam.descuento || 0,
-                    precio_cobrado_cup: parseFloat(entry.precio_cup || 0) || 0,
+                    exedente_redondeo: entry.exedente_redondeo || 0,
+                    descuento: pacienteParam?.descuento || 0,
+                    precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_comerciable: parseInt(entry.selected?.producto?.id_comerciable || entry.selected?.id_comerciable || 0, 10) || 0,
                     id_usuario: usuariosIds || [],
@@ -2214,6 +2255,8 @@ export default function HistoriaClinicaModalScreen() {
         const [localTotalConDescuento, setLocalTotalConDescuento] = useState('');
         const [selectionCobrar, setSelectionCobrar] = useState(null);
         const [selectionCon, setSelectionCon] = useState(null);
+        // Nuevo: delta input y selección para el nuevo modal
+        const [localDelta, setLocalDelta] = useState('0.00');
 
         useEffect(() => {
             if (!totalsModalVisible) return;
@@ -2225,6 +2268,8 @@ export default function HistoriaClinicaModalScreen() {
             setLocalTotalConDescuento(String(Number(initCon).toFixed(2)));
             setSelectionCobrar(null);
             setSelectionCon(null);
+            // Inicializar delta en 0 al abrir modal
+            setLocalDelta('0.00');
         }, [totalsModalVisible, userTotals]);
 
         const onChangeCobrar = (text) => {
@@ -2245,9 +2290,11 @@ export default function HistoriaClinicaModalScreen() {
         };
 
         const onSave = () => {
-            const tc = parseFloat(localTotalCobrar.replace(/,/g, '.')) || 0;
-            const tcd = parseFloat(localTotalConDescuento.replace(/,/g, '.')) || 0;
-            const ver = (originalTotalsRef.current && originalTotalsRef.current.version) || 0;
+            const orig = originalTotalsRef.current || { totalCobrar: 0, totalConDescuento: 0, version: 0 };
+            const delta = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+            const tc = Number(orig.totalCobrar || 0) + delta; // aplicar delta al total original
+            const tcd = tc - (tc * (parsedDescuento / 100));
+            const ver = (orig && orig.version) || 0;
             setUserTotals({ totalCobrar: tc, totalConDescuento: tcd, version: ver });
             setTotalsModalVisible(false);
         };
@@ -2257,44 +2304,105 @@ export default function HistoriaClinicaModalScreen() {
             setUserTotals({ totalCobrar: orig.totalCobrar, totalConDescuento: orig.totalConDescuento, version: orig.version });
             setLocalTotalCobrar(String(Number(orig.totalCobrar).toFixed(2)));
             setLocalTotalConDescuento(String(Number(orig.totalConDescuento).toFixed(2)));
+            setLocalDelta('0.00');
         };
 
         return (
             <Modal visible={totalsModalVisible} transparent animationType="fade">
                 <View style={styles.loadingOverlay}>
                     <View style={[styles.loadingBox, { width: 340 }]}>
-                        <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={[styles.loadingText, { fontWeight: '700', marginBottom: Spacing.s }]}>Editar Totales</Text>
-                            <TouchableOpacity onPress={() => setTotalsModalVisible(false)} style={{ padding: 6 }}>
-                                <Text style={{ fontSize: 18, fontWeight: '700', color: Colors.textSecondary }}>✕</Text>
+                        <View style={{ width: '100%', alignItems: 'center', marginBottom: Spacing.s, position: 'relative' }}>
+                            <Text style={[styles.loadingText, { fontWeight: '700', textAlign: 'center' }]}>Adicionar o Restar Valor a Totales</Text>
+                            <TouchableOpacity
+                                onPress={() => setTotalsModalVisible(false)}
+                                style={{
+                                    position: 'absolute',
+                                    right: 8,
+                                    top: 8,
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 18,
+                                    backgroundColor: '#c00',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                                accessibilityLabel="Cerrar modal"
+                            >
+                                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18 }}>✕</Text>
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={[styles.label, { marginTop: Spacing.s }]}>Total a cobrar (original: ${originalTotalsRef.current.totalCobrar.toFixed(2)})</Text>
-                        <TextInput
-                            style={[styles.input, { marginTop: Spacing.xs }]}
-                            keyboardType="numeric"
-                            value={localTotalCobrar}
-                            onChangeText={onChangeCobrar}
-                            onFocus={() => setSelectionCobrar({ start: 0, end: (localTotalCobrar || '').length })}
-                            selection={selectionCobrar}
-                        />
+                        {/* Mostrar original -> preview */}
+                        <View style={{ width: '100%', alignItems: 'center', marginVertical: Spacing.s }}>
+                            <Text style={[styles.label, { textAlign: 'center' }]}>Original</Text>
+                            <Text style={[styles.summaryValue, { textAlign: 'center' }]}>${Number(originalTotalsRef.current.totalCobrar).toFixed(2)}</Text>
+                            <Text style={{ marginVertical: 6 }}>→</Text>
+                            <Text style={[styles.label, { textAlign: 'center' }]}>Preview</Text>
+                            {/* Preview = original + delta */}
+                            <Text style={[styles.summaryValue, { textAlign: 'center' }]}>${Number((originalTotalsRef.current.totalCobrar || 0) + (parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0)).toFixed(2)}</Text>
+                        </View>
 
-                        <Text style={[styles.label, { marginTop: Spacing.s }]}>Total con descuento ({parsedDescuento}%):</Text>
-                        <TextInput
-                            style={[styles.input, { marginTop: Spacing.xs }]}
-                            keyboardType="numeric"
-                            value={localTotalConDescuento}
-                            onChangeText={onChangeCon}
-                            onFocus={() => setSelectionCon({ start: 0, end: (localTotalConDescuento || '').length })}
-                            selection={selectionCon}
-                        />
+                        {/* Campo numérico y botones */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.s }}>
+                            <View style={{ flexDirection: 'column', gap: Spacing.xs }}>
+                                <TouchableOpacity
+                                    style={{ borderWidth: 1, borderColor: '#c00', padding: 8, borderRadius: 6, marginBottom: Spacing.xs }}
+                                    onPress={() => {
+                                        const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                                        const next = curr - 20;
+                                        setLocalDelta(String(Number(next).toFixed(2)));
+                                    }}
+                                >
+                                    <Text style={{ color: '#c00', fontWeight: '700' }}>-20</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={{ borderWidth: 1, borderColor: '#c00', padding: 8, borderRadius: 6 }}
+                                    onPress={() => {
+                                        const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                                        const next = curr - 10;
+                                        setLocalDelta(String(Number(next).toFixed(2)));
+                                    }}
+                                >
+                                    <Text style={{ color: '#c00', fontWeight: '700' }}>-10</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <TextInput
+                                style={[styles.input, { textAlign: 'center', flex: 1 }]}
+                                keyboardType="numeric"
+                                value={localDelta}
+                                onChangeText={(t) => setLocalDelta(t)}
+                            />
+
+                            <View style={{ flexDirection: 'column', gap: Spacing.xs }}>
+                                <TouchableOpacity
+                                    style={{ borderWidth: 1, borderColor: '#0a0', padding: 8, borderRadius: 6, marginBottom: Spacing.xs }}
+                                    onPress={() => {
+                                        const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                                        const next = curr + 10;
+                                        setLocalDelta(String(Number(next).toFixed(2)));
+                                    }}
+                                >
+                                    <Text style={{ color: '#0a0', fontWeight: '700' }}>+10</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={{ borderWidth: 1, borderColor: '#0a0', padding: 8, borderRadius: 6 }}
+                                    onPress={() => {
+                                        const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                                        const next = curr + 20;
+                                        setLocalDelta(String(Number(next).toFixed(2)));
+                                    }}
+                                >
+                                    <Text style={{ color: '#0a0', fontWeight: '700' }}>+20</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
 
                         <View style={{ flexDirection: 'row', gap: Spacing.s, marginTop: Spacing.m }}>
                             <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: '#28a745' }]} onPress={onSave}>
                                 <Text style={styles.saveButtonText}>Guardar</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: Colors.primary, marginLeft: Spacing.s }]} onPress={onReset}>
+                            <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: Colors.boton_azul, marginLeft: Spacing.s }]} onPress={onReset}>
                                 <Text style={styles.saveButtonText}>Restablecer</Text>
                             </TouchableOpacity>
                         </View>
@@ -2668,33 +2776,61 @@ export default function HistoriaClinicaModalScreen() {
                         const parsedDescuento = parseFloat(descuentoPaciente) || 0;
                         const totalConDescuento = totalCobrar - (totalCobrar * (parsedDescuento / 100));
 
+                        // Preparar valores para mostrar y para redondeo
+                        const orig = originalTotalsRef.current || { totalCobrar: totalCobrar, totalConDescuento: totalConDescuento, version: 0 };
+                        const useUser = (userTotals.version === orig.version) && (userTotals.totalCobrar !== null);
+                        const displayTotalCobrar = useUser ? userTotals.totalCobrar : totalCobrar;
+                        const displayTotalCon = useUser ? userTotals.totalConDescuento : totalConDescuento;
+
+                        // Calcular redondeo según redondeoValue
+                        let roundedTotalCon = Math.round(Number(displayTotalCon) || 0);
+                        try {
+                            const rv = (redondeoValue || '').toString();
+                            if (/normal/i.test(rv)) {
+                                roundedTotalCon = Math.round(Number(displayTotalCon) || 0);
+                            } else {
+                                const m = rv.match(/\d+/);
+                                if (m) {
+                                    const inc = parseInt(m[0], 10) || 0;
+                                    const base = Math.round(Number(displayTotalCon) || 0);
+                                    if (inc > 0) {
+                                        if (base % inc === 0) roundedTotalCon = base;
+                                        else roundedTotalCon = base + (inc - (base % inc));
+                                    } else {
+                                        roundedTotalCon = Math.round(Number(displayTotalCon) || 0);
+                                    }
+                                } else {
+                                    roundedTotalCon = Math.round(Number(displayTotalCon) || 0);
+                                }
+                            }
+                        } catch (e) {
+                            roundedTotalCon = Math.round(Number(displayTotalCon) || 0);
+                        }
+
+                        let exedenteRounded = Number(roundedTotalCon) - Number(displayTotalCon || 0);
+                        if (isNaN(exedenteRounded) || exedenteRounded < 0) exedenteRounded = 0;
+                        // Persistir el valor para uso en otras partes del componente
+                        try { exedenteRoundedRef.current = exedenteRounded; } catch (e) { /* ignore */ }
                         return (
                             <View style={styles.section}>
                                 <Text style={styles.label}>Resumen de Cobro</Text>
 
-                                {(() => {
-                                    const orig = originalTotalsRef.current || { totalCobrar: totalCobrar, totalConDescuento: totalConDescuento, version: 0 };
-                                    const useUser = (userTotals.version === orig.version) && (userTotals.totalCobrar !== null);
-                                    const displayTotalCobrar = useUser ? userTotals.totalCobrar : totalCobrar;
-                                    const displayTotalCon = useUser ? userTotals.totalConDescuento : totalConDescuento;
-                                    return (
-                                        <>
-                                            <TouchableOpacity style={styles.summaryRow} onPress={() => { (mode === "crear") ? setTotalsModalVisible(true) : {} }}>
-                                                <Text style={styles.summaryLabel}>Total a cobrar:</Text>
-                                                <Text style={styles.summaryValue}>${Number(displayTotalCobrar).toFixed(2)}</Text>
-                                            </TouchableOpacity>
+                                <TouchableOpacity style={styles.summaryRow} onPress={() => { (mode === "crear" || mode === "editar") ? setTotalsModalVisible(true) : {} }}>
+                                    <Text style={styles.summaryLabel}>Total a cobrar:</Text>
+                                    <Text style={styles.summaryValue}>${Number(displayTotalCobrar).toFixed(2)}</Text>
+                                </TouchableOpacity>
 
-                                            <TouchableOpacity style={styles.summaryRow} onPress={() => { (mode === "crear") ? setTotalsModalVisible(true) : {} }}>
-                                                <View style={styles.summaryLabelContainer}>
-                                                    <Text style={styles.summaryLabel}>Total con descuento </Text>
-                                                    <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>
-                                                    <Text style={styles.summaryLabel}>:</Text>
-                                                </View>
-                                                <Text style={styles.summaryValue}>${Number(displayTotalCon).toFixed(2)}</Text>
-                                            </TouchableOpacity>
-                                        </>
-                                    );
-                                })()}
+                                <TouchableOpacity style={styles.summaryRow} onPress={() => { (mode === "crear" || mode === "editar") ? setTotalsModalVisible(true) : {} }}>
+                                    <View style={styles.summaryLabelContainer}>
+                                        <Text style={styles.summaryLabel}>Total con descuento </Text>
+                                        <Text style={[styles.summaryLabel, styles.descuentoText]}>({parsedDescuento}%)</Text>
+                                        <Text style={styles.summaryLabel}>:</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Text style={{ fontSize: Typography.body, color: Colors.textSecondary }}>${Number(displayTotalCon).toFixed(2)}</Text>
+                                        <Text style={styles.summaryValue}>${Number(roundedTotalCon).toFixed(2)}</Text>
+                                    </View>
+                                </TouchableOpacity>
 
                                 <View style={styles.summaryRow}>
                                     <Text style={styles.summaryLabel}>Plus (Ganancia):</Text>
@@ -2707,6 +2843,13 @@ export default function HistoriaClinicaModalScreen() {
                                         if (useUserNow && userVal > Number(origRef.totalCobrar)) {
                                             plusValue = userVal - Number(origRef.totalCobrar);
                                         }
+
+                                        // Si la configuración indica sumar el exedente al plus, hacerlo
+                                        try {
+                                            if (!isRedondeoFromPlus && typeof exedenteRounded !== 'undefined') {
+                                                plusValue = Number(plusValue) + Number(exedenteRounded || 0);
+                                            }
+                                        } catch (e) { /* ignore */ }
 
                                         return (
                                             <Text style={styles.summaryValue}>${Number(plusValue).toFixed(2)}</Text>

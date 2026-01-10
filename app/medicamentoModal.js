@@ -254,7 +254,6 @@ export default function MedicamentoModalScreen() {
 
             const body = {
                 nombre: medicamentoData.nombre,
-                codigo: medicamentoData.codigo ? Number(medicamentoData.codigo) : null,
                 costo_usd: medicamentoData.costo_usd ? Number(medicamentoData.costo_usd) : 0,
                 costo_cup: medicamentoData.costo_cup ? Number(medicamentoData.costo_cup) : 0,
                 categoria: medicamentoData.categoria,
@@ -266,6 +265,17 @@ export default function MedicamentoModalScreen() {
                 unidad_medida: medicamentoData.unidad_medida,
                 posologia: medicamentoData.posologia
             };
+
+            // En 'crear' incluir codigo (aunque sea null).
+            // En 'editar' incluir codigo solo si fue modificado respecto al código original.
+            if (mode === 'crear') {
+                body.codigo = medicamentoData.codigo ? Number(medicamentoData.codigo) : null;
+            } else if (mode === 'editar') {
+                const originalCodigo = medicamentoParam?.producto?.codigo ?? medicamentoParam?.codigo ?? null;
+                if (medicamentoData.codigo && String(medicamentoData.codigo) !== String(originalCodigo)) {
+                    body.codigo = Number(medicamentoData.codigo);
+                }
+            }
 
             const base = host.replace(/\/+$/, '');
             let url;
