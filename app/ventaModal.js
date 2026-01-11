@@ -12,7 +12,8 @@ import {
   findNodeHandle,
   UIManager,
   ToastAndroid,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -56,12 +57,19 @@ export default function VentaModalScreen() {
   const [usuariosDisponibles, setUsuariosDisponibles] = useState([]);
   const [usuariosLoading, setUsuariosLoading] = useState(false);
   const [usuariosPreseleccionados, setUsuariosPreseleccionados] = useState([]);
+  // Configuración de redondeo leída desde AsyncStorage @redondeoConfig
+  const [redondeoValue, setRedondeoValue] = useState(null);
+  const [isRedondeoFromPlus, setIsRedondeoFromPlus] = useState(false);
   const usuariosListRef = useRef(null);
   const scrollRef = useRef(null);
   const comerciableFieldRef = useRef(null);
   const usuariosFieldRef = useRef(null);
   const cantidadFieldRef = useRef(null);
   const precioFieldRef = useRef(null);
+  // Modal para ajustar totales
+  const [totalsModalVisible, setTotalsModalVisible] = useState(false);
+  const [localDelta, setLocalDelta] = useState('0.00');
+  const originalTotalsRef = useRef({ totalCobrar: 0 });
 
   const formaPagoOptions = [
     { id: 1, nombre: 'Efectivo' },
@@ -150,6 +158,24 @@ export default function VentaModalScreen() {
         const cfg = rawCfg ? JSON.parse(rawCfg) : null;
         const host = cfg?.api_host || cfg?.apihost || cfg?.apiHost;
         const token = cfg?.token;
+
+        // Leer configuración de redondeo desde AsyncStorage y guardarla en el estado
+        try {
+          const rawRed = await AsyncStorage.getItem('@redondeoConfig');
+          if (rawRed) {
+            const redCfg = JSON.parse(rawRed);
+            setRedondeoValue(redCfg?.value ?? null);
+            setIsRedondeoFromPlus(!!redCfg?.isRedondeoFromPlus);
+          } else {
+            setRedondeoValue(null);
+            setIsRedondeoFromPlus(false);
+          }
+        } catch (e) {
+          console.error('Error leyendo @redondeoConfig:', e);
+          setRedondeoValue(null);
+          setIsRedondeoFromPlus(false);
+        }
+
         if (!host) return;
         setUsuariosLoading(true);
         const url = `${host.replace(/\/+$/, '')}/usuario`;
@@ -226,6 +252,13 @@ export default function VentaModalScreen() {
           const merged = Array.from(map.values());
           if (merged.length > 0) setUsuariosPreseleccionados(merged);
         }
+        // Inicializar originalTotalsRef con el precio actual de la venta (si aplica)
+        try {
+          const base = Number(ventaData.precio_cobrado_cup) || 0;
+          originalTotalsRef.current = { totalCobrar: base };
+        } catch (e) {
+          originalTotalsRef.current = { totalCobrar: 0 };
+        }
       } catch (err) {
         console.error('Error fetching usuarios:', err);
         setUsuariosDisponibles([]);
@@ -237,6 +270,32 @@ export default function VentaModalScreen() {
 
     fetchUsuarios();
   }, []);
+
+  // Cuando se abre el modal, inicializar localDelta y originalTotalsRef
+  useEffect(() => {
+    if (!totalsModalVisible) return;
+    try {
+      const base = Number(ventaData.precio_cobrado_cup) || 0;
+      originalTotalsRef.current = { totalCobrar: base };
+    } catch (e) {
+      originalTotalsRef.current = { totalCobrar: 0 };
+    }
+    setLocalDelta('0.00');
+  }, [totalsModalVisible]);
+
+  const onSave = () => {
+    const delta = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+    setVentaData(prev => {
+      const prevPrice = Number(prev.precio_cobrado_cup) || 0;
+      const next = prevPrice + delta;
+      return { ...prev, precio_cobrado_cup: String(formatearNumero(next)) };
+    });
+    setTotalsModalVisible(false);
+  };
+
+  const onReset = () => {
+    setLocalDelta('0.00');
+  };
 
   const handleChange = (field, value) => setVentaData(prev => ({ ...prev, [field]: value }));
 
@@ -279,6 +338,34 @@ export default function VentaModalScreen() {
     }
     return parseFloat(redondeado.toFixed(5).replace(/\.?0+$/, ''));
   }
+
+  // Aplicar la misma lógica de redondeo usada en historia_clinicaModal
+  const computeRoundedValue = (displayValue) => {
+    let rounded = Math.round(Number(displayValue) || 0);
+    try {
+      const rv = (redondeoValue || '').toString();
+      if (/normal/i.test(rv)) {
+        rounded = Math.round(Number(displayValue) || 0);
+      } else {
+        const m = rv.match(/\d+/);
+        if (m) {
+          const inc = parseInt(m[0], 10) || 0;
+          const base = Math.round(Number(displayValue) || 0);
+          if (inc > 0) {
+            if (base % inc === 0) rounded = base;
+            else rounded = base + (inc - (base % inc));
+          } else {
+            rounded = Math.round(Number(displayValue) || 0);
+          }
+        } else {
+          rounded = Math.round(Number(displayValue) || 0);
+        }
+      }
+    } catch (e) {
+      rounded = Math.round(Number(displayValue) || 0);
+    }
+    return rounded;
+  };
 
   const handleSave = async () => {
     // Validaciones previas: comerciable obligatorio y al menos un usuario asignado
@@ -451,6 +538,14 @@ export default function VentaModalScreen() {
         ? selectedUsuarios.map(u => u.id_usuario ?? u.id).filter(Boolean)
         : (ventaParam?.usuarios ? (Array.isArray(ventaParam.usuarios) ? ventaParam.usuarios.map(u => u.id_usuario ?? u.id).filter(Boolean) : [(ventaParam.usuarios.id_usuario ?? ventaParam.usuarios.id)]) : []);
 
+      // Calcular total normal y redondeado para incluir exedente_redondeo en el payload
+      const _priceForTotals = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
+      const _qtyForTotals = parseFloat(ventaData.cantidad || '0') || 0;
+      const _totalNormal = _priceForTotals * _qtyForTotals;
+      const _totalRedondeado = computeRoundedValue(_totalNormal);
+      const _excedenteRaw = Number(_totalRedondeado) - Number(_totalNormal);
+      const _excedente = Math.max(0, isNaN(_excedenteRaw) ? 0 : _excedenteRaw);
+
       const payload = {
         fecha: fechaIso,
         precio_original_comerciable_cup: ventaData.precio_original_comerciable_cup ? Number(ventaData.precio_original_comerciable_cup) : (ventaParam?.precio_original_comerciable_cup ?? 0),
@@ -458,6 +553,7 @@ export default function VentaModalScreen() {
         costo_producto_cup: ventaData.costo_producto_cup ? Number(ventaData.costo_producto_cup) : (ventaParam?.costo_producto_cup ?? 0),
         cantidad: Number(ventaData.cantidad) || 0,
         precio_cobrado_cup: ventaData.precio_cobrado_cup ? Number(ventaData.precio_cobrado_cup) : 0,
+        exedente_redondeo: Number(formatearNumero(_excedente)) || 0,
         forma_pago: ventaData.forma_pago || 'Efectivo',
         nota: ventaData.nota || '',
         id_comerciable: idComerciable ?? 0,
@@ -468,7 +564,7 @@ export default function VentaModalScreen() {
       if (idCliente !== null && idCliente !== undefined && String(idCliente).trim() !== '') {
         payload.id_cliente = idCliente;
       }
-      
+
       let url = '';
       let method = 'POST';
       if (mode === 'crear') {
@@ -651,29 +747,68 @@ export default function VentaModalScreen() {
             </View>
           </View>
 
-          <View style={styles.infoBox}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.infoText}>
-                {`Total a cobrar: ${(() => {
-                  const price = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
-                  const qty = parseFloat(ventaData.cantidad || '0') || 0;
-                  const total = price * qty;
-                  return isNaN(total) ? '0.00' : String(formatearNumero(total));
-                })()}`}
-              </Text>
+          <TouchableOpacity onPress={() => setTotalsModalVisible(true)}>
+            <View style={styles.infoBox}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                {/* Total a cobrar: mostrar antes y después del redondeo */}
+                <View style={{ flex: 1, alignItems: 'flex-start' }}>
+                  <Text style={[styles.summaryValue, { flexWrap: 'nowrap' }]}>
+                    Total:
+                    {(() => {
+                      const price = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
+                      const qty = parseFloat(ventaData.cantidad || '0') || 0;
+                      const total = price * qty;
+                      const roundedTotal = computeRoundedValue(total);
+                      const before = isNaN(total) ? '0.00' : String(formatearNumero(total));
+                      return ` $${before} `;
+                    })()}
+                    <Text style={{
+                      fontWeight: '700',
+                      fontSize: Typography.body,
+                      color: Colors.textSecondary
+                    }}>$
+                      {(() => {
+                        const price = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
+                        const qty = parseFloat(ventaData.cantidad || '0') || 0;
+                        const total = price * qty;
+                        const roundedTotal = computeRoundedValue(total);
+                        return String(formatearNumero(roundedTotal));
+                      })()}
+                    </Text>
+                  </Text>
+                </View>
 
-              <Text style={styles.infoText}>
-                {`Plus: ${(() => {
-                  const price = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
-                  const qty = parseFloat(ventaData.cantidad || '0') || 0;
-                  const original = parseFloat(ventaData.precio_original_comerciable_cup || '0') || 0;
-                  const plusVal = (price * qty) - (original * qty);
-                  const plus = isNaN(plusVal) ? 0 : Math.max(0, plusVal);
-                  return String(formatearNumero(plus));
-                })()}`}
-              </Text>
+                {/* Plus: mostrar antes y después del redondeo */}
+                <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                  {(() => {
+                    const price = parseFloat(ventaData.precio_cobrado_cup || '0') || 0;
+                    const qty = parseFloat(ventaData.cantidad || '0') || 0;
+                    const original = parseFloat(ventaData.precio_original_comerciable_cup || '0') || 0;
+                    const plusVal = (price * qty) - (original * qty);
+                    const plus = isNaN(plusVal) ? 0 : Math.max(0, plusVal);
+                    const roundedPlus = computeRoundedValue(plus);
+
+                    return (
+                      <Text style={[{
+                        flexWrap: 'nowrap',
+                        fontWeight: 'normal'
+                      }]}>
+                        Plus:{' '}
+                        <Text style={{
+                          fontWeight: '700',
+                          fontSize: Typography.body,
+                          color: Colors.textSecondary
+                        }}>
+                          {String(formatearNumero(plus))}
+                        </Text>
+                      </Text>
+                    );
+                  })()}
+                </View>
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
+
 
           <View style={styles.row}>
             <View style={[styles.field, { flex: 1, marginRight: Spacing.s }]}>
@@ -779,83 +914,194 @@ export default function VentaModalScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
-        <QRScannerModal
-          visible={showScannerModal}
-          onClose={() => setShowScannerModal(false)}
-          onCodeScanned={async (code) => {
-            try {
-              const raw = await AsyncStorage.getItem('@config');
-              if (!raw) { Alert.alert('Error', 'No se encontró configuración'); setShowScannerModal(false); return; }
-              const config = JSON.parse(raw);
-              const host = config.api_host || config.apihost || config.apiHost;
-              const token = config.token;
-              if (!host) { Alert.alert('Error', 'No se encontró host en la configuración'); setShowScannerModal(false); return; }
-console.log("Codigo escanead: ",String(code));
+      <Modal visible={totalsModalVisible} transparent animationType="fade">
+        <View style={styles.loadingOverlay}>
+          <View style={[styles.loadingBox, { width: 340 }]}>
+            <View style={{ width: '100%', alignItems: 'center', marginBottom: Spacing.s, position: 'relative' }}>
+              <Text style={[styles.loadingText, { fontWeight: '700', textAlign: 'center' }]}>Adicionar o Restar Valor a Totales</Text>
+              <TouchableOpacity
+                onPress={() => setTotalsModalVisible(false)}
+                style={{
+                  position: 'absolute',
+                  right: 8,
+                  top: 8,
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: '#c00',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                accessibilityLabel="Cerrar modal"
+              >
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 18 }}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-              const url = `${host.replace(/\/+$/, '')}/producto/filter/1/1`;
-              const res = await fetch(url, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify({ codigo: String(code) })
-              });
+            <View style={{ width: '100%', alignItems: 'center', marginVertical: Spacing.s }}>
+              <Text style={[styles.label, { textAlign: 'center' }]}>Original</Text>
+              <Text style={[styles.summaryValue, { textAlign: 'center' }]}>${Number(originalTotalsRef.current.totalCobrar).toFixed(2)}</Text>
+              <Text style={{ marginVertical: 6 }}>→</Text>
+              <Text style={[styles.label, { textAlign: 'center' }]}>Preview</Text>
+              <Text style={[styles.summaryValue, { textAlign: 'center' }]}>${Number((originalTotalsRef.current.totalCobrar || 0) + (parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0)).toFixed(2)}</Text>
+            </View>
 
-              let responseData = null;
-              try { responseData = await res.json(); } catch (e) { responseData = null; }
-              if (!res.ok || !responseData) {
-                Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
-                setShowScannerModal(false);
-                return;
-              }
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.s }}>
+              <View style={{ flexDirection: 'column', gap: Spacing.xs }}>
+                <TouchableOpacity
+                  style={{ borderWidth: 1, borderColor: '#c00', padding: 8, borderRadius: 6, marginBottom: Spacing.xs }}
+                  onPress={() => {
+                    const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                    const next = curr - 20;
+                    setLocalDelta(String(Number(next).toFixed(2)));
+                  }}
+                >
+                  <Text style={{ color: '#c00', fontWeight: '700' }}>-20</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ borderWidth: 1, borderColor: '#c00', padding: 8, borderRadius: 6 }}
+                  onPress={() => {
+                    const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                    const next = curr - 10;
+                    setLocalDelta(String(Number(next).toFixed(2)));
+                  }}
+                >
+                  <Text style={{ color: '#c00', fontWeight: '700' }}>-10</Text>
+                </TouchableOpacity>
+              </View>
 
-              const item = (responseData.data && responseData.data.length > 0) ? responseData.data[0] : null;
-              if (!item) {
-                Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
-                setShowScannerModal(false);
-                return;
-              }
+              <TextInput
+                style={[styles.input, { textAlign: 'center', flex: 1 }]}
+                keyboardType="numeric"
+                value={localDelta}
+                onChangeText={(t) => setLocalDelta(t)}
+              />
 
-              // Simular la selección del item en el Autocomplete
-              setSelectedComerciable(item);
-              setComercialeBusqueda('');
-              const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
-              handleChange('comerciable_display', display);
-              handleChange('comerciable_id', item.id_comerciable || item.id || null);
-              handleChange('precio_original_comerciable_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
-              handleChange('precio_original_comerciable_usd', item.precio_usd != null ? String(item.precio_usd) : (item.producto?.costo_usd ? String(item.producto.costo_usd) : ''));
-              try {
-                let tipo = '';
-                if (item.producto) {
-                  const isMedicamento = Boolean(item.producto.medicamento || item.producto.isMedicamento || item.producto.tipo === 'medicamento');
-                  tipo = isMedicamento ? 'medicamento' : 'producto';
-                } else if (item.servicio) {
-                  tipo = 'servicio';
-                } else if (item.tipo) {
-                  tipo = item.tipo;
-                }
-                handleChange('tipo_comerciable', tipo);
-              } catch (e) {
-                handleChange('tipo_comerciable', '');
-              }
-              try {
-                const rawPrice = item.precio_cup != null ? Number(item.precio_cup) : (item.producto?.costo_cup ? Number(item.producto.costo_cup) : null);
-                const descuento = Number(ventaParam?.descuento) || 0;
-                const finalPrice = (rawPrice != null && descuento > 0) ? (rawPrice * (1 - descuento / 100)) : rawPrice;
-                handleChange('precio_cobrado_cup', finalPrice != null ? String(formatearNumero(finalPrice)) : '');
-              } catch (e) {
-                handleChange('precio_cobrado_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
-              }
+              <View style={{ flexDirection: 'column', gap: Spacing.xs }}>
+                <TouchableOpacity
+                  style={{ borderWidth: 1, borderColor: '#0a0', padding: 8, borderRadius: 6, marginBottom: Spacing.xs }}
+                  onPress={() => {
+                    const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                    const next = curr + 10;
+                    setLocalDelta(String(Number(next).toFixed(2)));
+                  }}
+                >
+                  <Text style={{ color: '#0a0', fontWeight: '700' }}>+10</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ borderWidth: 1, borderColor: '#0a0', padding: 8, borderRadius: 6 }}
+                  onPress={() => {
+                    const curr = parseFloat((localDelta || '').toString().replace(/,/g, '.')) || 0;
+                    const next = curr + 20;
+                    setLocalDelta(String(Number(next).toFixed(2)));
+                  }}
+                >
+                  <Text style={{ color: '#0a0', fontWeight: '700' }}>+20</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
 
+            <View style={{ flexDirection: 'row', gap: Spacing.s, marginTop: Spacing.m }}>
+              <TouchableOpacity style={[styles.saveButton, { flex: 1, backgroundColor: '#28a745' }]} onPress={onSave}>
+                <Text style={styles.saveButtonText}>Guardar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveButton, { flex: 1, backgroundColor: Colors.boton_azul, marginLeft: Spacing.s }]}
+                onPress={() => {
+                  setVentaData(prev => {
+                    const original = prev.precio_original_comerciable_cup;
+                    const newPrice = (original !== null && original !== undefined && String(original).trim() !== '')
+                      ? String(formatearNumero(Number(original)))
+                      : '';
+                    return { ...prev, precio_cobrado_cup: newPrice };
+                  });
+                  setLocalDelta('0.00');
+                }}
+              >
+                <Text style={styles.saveButtonText}>Restablecer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <QRScannerModal
+        visible={showScannerModal}
+        onClose={() => setShowScannerModal(false)}
+        onCodeScanned={async (code) => {
+          try {
+            const raw = await AsyncStorage.getItem('@config');
+            if (!raw) { Alert.alert('Error', 'No se encontró configuración'); setShowScannerModal(false); return; }
+            const config = JSON.parse(raw);
+            const host = config.api_host || config.apihost || config.apiHost;
+            const token = config.token;
+            if (!host) { Alert.alert('Error', 'No se encontró host en la configuración'); setShowScannerModal(false); return; }
+            console.log("Codigo escanead: ", String(code));
+
+            const url = `${host.replace(/\/+$/, '')}/producto/filter/1/1`;
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+              },
+              body: JSON.stringify({ codigo: String(code) })
+            });
+
+            let responseData = null;
+            try { responseData = await res.json(); } catch (e) { responseData = null; }
+            if (!res.ok || !responseData) {
+              Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
               setShowScannerModal(false);
-            } catch (err) {
-              console.error('Error buscando por código:', err);
-              Alert.alert('Error', 'No se pudo buscar el código');
-              setShowScannerModal(false);
+              return;
             }
-          }}
-        />
+
+            const item = (responseData.data && responseData.data.length > 0) ? responseData.data[0] : null;
+            if (!item) {
+              Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
+              setShowScannerModal(false);
+              return;
+            }
+
+            // Simular la selección del item en el Autocomplete
+            setSelectedComerciable(item);
+            setComercialeBusqueda('');
+            const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
+            handleChange('comerciable_display', display);
+            handleChange('comerciable_id', item.id_comerciable || item.id || null);
+            handleChange('precio_original_comerciable_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+            handleChange('precio_original_comerciable_usd', item.precio_usd != null ? String(item.precio_usd) : (item.producto?.costo_usd ? String(item.producto.costo_usd) : ''));
+            try {
+              let tipo = '';
+              if (item.producto) {
+                const isMedicamento = Boolean(item.producto.medicamento || item.producto.isMedicamento || item.producto.tipo === 'medicamento');
+                tipo = isMedicamento ? 'medicamento' : 'producto';
+              } else if (item.servicio) {
+                tipo = 'servicio';
+              } else if (item.tipo) {
+                tipo = item.tipo;
+              }
+              handleChange('tipo_comerciable', tipo);
+            } catch (e) {
+              handleChange('tipo_comerciable', '');
+            }
+            try {
+              const rawPrice = item.precio_cup != null ? Number(item.precio_cup) : (item.producto?.costo_cup ? Number(item.producto.costo_cup) : null);
+              const descuento = Number(ventaParam?.descuento) || 0;
+              const finalPrice = (rawPrice != null && descuento > 0) ? (rawPrice * (1 - descuento / 100)) : rawPrice;
+              handleChange('precio_cobrado_cup', finalPrice != null ? String(formatearNumero(finalPrice)) : '');
+            } catch (e) {
+              handleChange('precio_cobrado_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+            }
+
+            setShowScannerModal(false);
+          } catch (err) {
+            console.error('Error buscando por código:', err);
+            Alert.alert('Error', 'No se pudo buscar el código');
+            setShowScannerModal(false);
+          }
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -1017,5 +1263,29 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     tintColor: '#fff',
+  },
+  summaryValue: {
+    fontSize: Typography.body,
+    fontWeight: 'normal',
+    color: Colors.textSecondary,
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingBox: {
+    backgroundColor: '#fff',
+    padding: Spacing.m,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  loadingText: {
+    marginTop: Spacing.s,
+    color: Colors.textSecondary,
+    fontSize: Typography.body,
   },
 });
