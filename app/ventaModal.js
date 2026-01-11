@@ -45,6 +45,7 @@ export default function VentaModalScreen() {
     nombre_cliente: ventaParam?.nombre_cliente || '',
     nombre_usuario: ventaParam?.nombre_usuario || '',
     nota: ventaParam?.nota || ''
+    ,exedente_redondeo: ventaParam?.exedente_redondeo != null ? String(ventaParam.exedente_redondeo) : '0'
   }));
 
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -60,6 +61,7 @@ export default function VentaModalScreen() {
   // Configuración de redondeo leída desde AsyncStorage @redondeoConfig
   const [redondeoValue, setRedondeoValue] = useState(null);
   const [isRedondeoFromPlus, setIsRedondeoFromPlus] = useState(false);
+  const [isAdminUser, setIsAdminUser] = useState(false);
   const usuariosListRef = useRef(null);
   const scrollRef = useRef(null);
   const comerciableFieldRef = useRef(null);
@@ -110,7 +112,8 @@ export default function VentaModalScreen() {
           comerciable_id: ventaParam?.comerciable?.id_comerciable || ventaParam?.comerciable?.id || prev.comerciable_id,
           nombre_cliente: ventaParam?.nombre_cliente || prev.nombre_cliente,
           nombre_usuario: ventaParam?.nombre_usuario || prev.nombre_usuario,
-          nota: ventaParam?.nota || prev.nota
+          nota: ventaParam?.nota || prev.nota,
+          exedente_redondeo: ventaParam?.exedente_redondeo != null ? String(ventaParam.exedente_redondeo) : prev.exedente_redondeo
         }
       }));
       // Inicializar selectedComerciable para que ApiAutocomplete muestre el valor en modo ver/editar
@@ -156,6 +159,23 @@ export default function VentaModalScreen() {
       try {
         const rawCfg = await AsyncStorage.getItem('@config');
         const cfg = rawCfg ? JSON.parse(rawCfg) : null;
+        // Determinar si el usuario actual es administrador leyendo @config.userConfig.rol === 'Administrador'
+        try {
+          let userCfgRaw = null;
+          try { userCfgRaw = await AsyncStorage.getItem('@config.userConfig'); } catch (e) { userCfgRaw = null; }
+          let userObj = null;
+          if (userCfgRaw) {
+            try { userObj = JSON.parse(userCfgRaw); } catch (e) { userObj = null; }
+          }
+          if (!userObj) {
+            userObj = cfg?.userConfig || cfg?.usuario || cfg?.user || cfg;
+          }
+          const rolVal = (userObj && (userObj.rol || userObj.role || '')) ? String(userObj.rol || userObj.role || '') : '';
+          const isAdmin = /administrador/i.test(rolVal) || !!(userObj && (userObj.isAdmin === true || userObj.is_admin === true || userObj.es_admin === true || userObj.admin === true));
+          setIsAdminUser(isAdmin);
+        } catch (e) {
+          setIsAdminUser(false);
+        }
         const host = cfg?.api_host || cfg?.apihost || cfg?.apiHost;
         const token = cfg?.token;
 
@@ -704,6 +724,11 @@ export default function VentaModalScreen() {
             <View style={{ marginTop: Spacing.s }}>
               <Text style={styles.infoText}>{`Tipo comerciable: ${ventaData.tipo_comerciable || ventaParam?.tipo_comerciable || '-'}`}</Text>
             </View>
+            {isAdminUser && (mode !== "crear") && (
+              <View style={{ marginTop: Spacing.s }}>
+                <Text style={[styles.infoText, { color: Colors.primary, fontWeight: '700' }]}>{`Excedente redondeo: ${ventaData.exedente_redondeo ? String(formatearNumero(Number(ventaData.exedente_redondeo))) : '0'}`}</Text>
+              </View>
+            )}
             {(mode === 'ver' || mode === 'editar') && Number(ventaParam?.descuento) > 0 && (
               <View style={{ marginTop: Spacing.s }}>
                 {(() => {
