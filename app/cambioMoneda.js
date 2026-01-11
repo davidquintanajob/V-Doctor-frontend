@@ -17,6 +17,7 @@ export default function CambioMonedaScreen() {
   const [confirmDisabled, setConfirmDisabled] = useState(true);
   const [modalShowInfo, setModalShowInfo] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(0);
+  const [costoFormula, setCostoFormula] = useState('');
   const timerRef = useRef(null);
   const [roundOption, setRoundOption] = useState('');
   const [isRedondeoFromPlus, setIsRedondeoFromPlus] = useState(false);
@@ -74,7 +75,7 @@ export default function CambioMonedaScreen() {
           });
           const rdata = await rres.json();
           if (!mounted) return;
-          if (rdata) {
+            if (rdata) {
             if (typeof rdata.value !== 'undefined') {
               setRoundOption(String(rdata.value));
             } else if (typeof rdata === 'string') {
@@ -87,6 +88,11 @@ export default function CambioMonedaScreen() {
               const isPlus = v === true || v === 'true' || v === 1 || v === '1';
               setIsRedondeoFromPlus(Boolean(isPlus));
             }
+
+              // Nuevo: leer costoFormula si viene en la respuesta
+              if (typeof rdata.costoFormula !== 'undefined') {
+                setCostoFormula(String(rdata.costoFormula));
+              }
           }
         } catch (e) {
           console.log('Error fetching /redondeo:', e);
@@ -192,6 +198,7 @@ export default function CambioMonedaScreen() {
           const rbody = {
             value: roundOption,
             isRedondeoFromPlus: String(isRedondeoFromPlus),
+            costoFormula: costoFormula,
           };
 
           const rres = await fetch(`${host}/redondeo/updateRedondeo`, {
@@ -261,9 +268,9 @@ export default function CambioMonedaScreen() {
           <Image source={require('../assets/images/arrow-left.png')} style={styles.icon} resizeMode="contain" />
         </TouchableOpacity>
 
-        <Text style={styles.title}>Cambio USD - CUP</Text>
+        <Text style={styles.title}>Configuraciones</Text>
 
-        <Text style={styles.label}>Valor</Text>
+        <Text style={styles.label}>Cambio moneda USD - CUP</Text>
         <TextInput
           style={styles.input}
           placeholder="500"
@@ -313,6 +320,8 @@ export default function CambioMonedaScreen() {
           </View>
         </View>
 
+
+
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 }}>
           <Text style={[styles.label, { marginBottom: 0 }]}>Aplicar exedente al plus del usuario</Text>
           <Switch
@@ -325,15 +334,35 @@ export default function CambioMonedaScreen() {
         {showInfo && (
           <View style={styles.infoBox}>
             <Text style={styles.infoText}>
-              Seleccione cómo desea que se redondea los importes en ventas y consultas.
+              Seleccione cómo desea que se redondea los importes en ventas y consultas.{'\n\n'}
               Ejemplo: "Normal" redondea 1.20→1.00. "Exeso 5" o superiores; redondea por
-              exeso al número natural inmediato más cercano divisible por el exeso.
+              exeso al número natural inmediato más cercano divisible por el exeso.{'\n\n'}
               Ejemplo para "Exeso 5": 13.03→15.00, 101.56→100.00, 14.12→15.00.
-              El exedente del redondeo está destinado al plus del usuario que realize
-              la venta si es que el redondeo es mayor a la suma total original de la venta.
+              El exedente del redondeo está destinado (según la configuración) al plus del usuario que realize
+              la venta o a la clínica.
             </Text>
           </View>
         )}
+
+        {/* Selector de fórmula de costo */}
+        <View style={{ marginTop: 10, marginBottom: 40 }}>
+          <Text style={styles.label}>Fórmula de costo</Text>
+          <View style={{ flexDirection: 'column', marginTop: 6 }}>
+            <TouchableOpacity
+              style={[styles.tipoBox, costoFormula === 'Promedio ponderado' && styles.tipoBoxSelected]}
+              onPress={() => setCostoFormula('Promedio ponderado')}
+            >
+              <Text style={[styles.tipoText, costoFormula === 'Promedio ponderado' && styles.tipoTextSelected]}>Promedio ponderado</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tipoBox, costoFormula === 'Primero en entrar, primero en salir' && styles.tipoBoxSelected]}
+              onPress={() => setCostoFormula('Primero en entrar, primero en salir')}
+            >
+              <Text style={[styles.tipoText, costoFormula === 'Primero en entrar, primero en salir' && styles.tipoTextSelected]}>Primero en entrar, primero en salir</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <TouchableOpacity
           style={[styles.button, { opacity: valor.trim() ? 1 : 0.6 }]}
