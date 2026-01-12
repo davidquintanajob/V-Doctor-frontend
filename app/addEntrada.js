@@ -437,6 +437,12 @@ export default function AddEntradaScreen() {
                     <Modal visible={modalVisible} transparent animationType="fade">
                         <View style={styles.modalOverlay}>
                             <View style={styles.modalBox}>
+                                <TouchableOpacity
+                                    style={styles.modalCloseButton}
+                                    onPress={() => { setModalVisible(false); setPendingRequest(null); }}
+                                >
+                                    <Text style={styles.modalCloseText}>✕</Text>
+                                </TouchableOpacity>
                                 <Text style={styles.modalTitle}>Modificar costos según fórmula</Text>
                                 <Text style={styles.modalText}>{selectedComerciable ? (selectedComerciable.producto?.nombre || selectedComerciable.nombre) : ''}</Text>
                                 <Text style={styles.modalText}>Fórmula: {costoFormula || 'N/A'}</Text>
@@ -473,7 +479,7 @@ const styles = StyleSheet.create({
     saveButtonText: { color: '#fff', fontSize: Typography.body, fontWeight: '600' }
     ,
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-    modalBox: { backgroundColor: '#fff', padding: Spacing.m, borderRadius: 8, width: '90%' },
+    modalBox: { backgroundColor: '#fff', padding: Spacing.m, borderRadius: 8, width: '90%', position: 'relative' },
     modalTitle: { fontSize: Typography.h4 || 18, fontWeight: '700', marginBottom: Spacing.s },
     modalText: { fontSize: Typography.body, marginBottom: Spacing.xs },
     modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.m },
@@ -482,4 +488,7 @@ const styles = StyleSheet.create({
     modalButtonText: { color: '#fff', fontWeight: '700' }
     ,
     modalCurrentLabel: { fontWeight: '700', marginTop: Spacing.s }
+    ,
+    modalCloseButton: { position: 'absolute', top: 8, left: 8, padding: 6, borderRadius: 16, zIndex: 10 },
+    modalCloseText: { fontSize: 18, color: Colors.textSecondary, fontWeight: '700' }
 });
