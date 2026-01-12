@@ -10,7 +10,9 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  Image
+  Image,
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -52,6 +54,7 @@ export default function ServicioComplejoModalScreen() {
   const [cambioMoneda, setCambioMoneda] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [ventasPage, setVentasPage] = useState(1);
+  const [isSaving, setIsSaving] = useState(false);
   const itemsPerPage = 10;
 
   const ventasList = servicioBase?.comerciable?.venta || [];
@@ -121,6 +124,7 @@ export default function ServicioComplejoModalScreen() {
   const handleBack = () => router.back();
 
   const handleSave = async () => {
+    setIsSaving(true);
     if (!servicioComplejoData.tipo_servicio) {
       Alert.alert('Validación', 'Tipo de servicio es requerido');
       return;
@@ -209,6 +213,8 @@ export default function ServicioComplejoModalScreen() {
     } catch (e) {
       console.error(e);
       Alert.alert('Error', 'No se pudo guardar');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -246,6 +252,13 @@ export default function ServicioComplejoModalScreen() {
     >
       <View style={styles.container}>
         <TopBar onMenuNavigate={() => { }} />
+        {isSaving && (
+          <Modal transparent={true} visible={isSaving} animationType="fade">
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          </Modal>
+        )}
         <ScrollView
           contentContainerStyle={[styles.scrollContentContainer, { paddingBottom: Spacing.page }]}
           keyboardShouldPersistTaps="handled"
@@ -329,40 +342,40 @@ export default function ServicioComplejoModalScreen() {
               </View>
             </View>
 
-              {/* Roles autorizados como checkboxes */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Roles autorizados *</Text>
-                <View style={styles.rolesRow}>
-                  {allRoles.map((role) => {
-                    const selected = rolesSelected.includes(role);
-                    return (
-                      <TouchableOpacity
-                        key={role}
-                        style={[
-                          styles.roleBox,
-                          selected && styles.roleBoxSelected,
-                          !isEditable && styles.disabledRole
-                        ]}
-                        onPress={() => {
-                          if (!isEditable) return;
-                          setRolesSelected((prev) => {
-                            if (prev.includes(role)) {
-                              return prev.filter((r) => r !== role);
-                            }
-                            return [...prev, role];
-                          });
-                        }}
+            {/* Roles autorizados como checkboxes */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Roles autorizados *</Text>
+              <View style={styles.rolesRow}>
+                {allRoles.map((role) => {
+                  const selected = rolesSelected.includes(role);
+                  return (
+                    <TouchableOpacity
+                      key={role}
+                      style={[
+                        styles.roleBox,
+                        selected && styles.roleBoxSelected,
+                        !isEditable && styles.disabledRole
+                      ]}
+                      onPress={() => {
+                        if (!isEditable) return;
+                        setRolesSelected((prev) => {
+                          if (prev.includes(role)) {
+                            return prev.filter((r) => r !== role);
+                          }
+                          return [...prev, role];
+                        });
+                      }}
+                    >
+                      <Text
+                        style={[styles.roleText, selected && styles.roleTextSelected]}
                       >
-                        <Text
-                          style={[styles.roleText, selected && styles.roleTextSelected]}
-                        >
-                          {role}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                        {role}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+            </View>
 
             {isEditable && (
               <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
@@ -456,6 +469,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: Spacing.xs,
     color: Colors.textSecondary,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
   },
   input: {
     backgroundColor: '#fff',

@@ -13,7 +13,9 @@ import {
     Platform,
     TouchableWithoutFeedback,
     Keyboard,
-    Image
+    Image,
+    Modal,
+    ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TopBar from '../components/TopBar';
@@ -53,6 +55,7 @@ export default function ProductoModalScreen() {
     const [rolesSelected, setRolesSelected] = useState([]);
     const [showScannerModal, setShowScannerModal] = useState(false);
     const [cambioMoneda, setCambioMoneda] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
 
     const [entradasPage, setEntradasPage] = useState(1);
     const [ventasPage, setVentasPage] = useState(1);
@@ -139,7 +142,7 @@ export default function ProductoModalScreen() {
             let costo_usd = prev.costo_usd;
             const cup = parseNumber(cleaned);
             if (cup != null && cambioMoneda && cambioMoneda > 0) {
-                costo_usd = String((cup / cambioMoneda).toFixed(2));
+                costo_usd = String((cup / cambioMoneda).toFixed(5));
             } else if (cleaned === '') {
                 costo_usd = '';
             }
@@ -153,7 +156,7 @@ export default function ProductoModalScreen() {
             let costo_cup = prev.costo_cup;
             const usd = parseNumber(cleaned);
             if (usd != null && cambioMoneda && cambioMoneda > 0) {
-                costo_cup = String(Math.round((usd * cambioMoneda) * 100) / 100);
+                costo_cup = String(Math.round((usd * cambioMoneda) * 100000) / 100000);
             } else if (cleaned === '') {
                 costo_cup = '';
             }
@@ -167,7 +170,7 @@ export default function ProductoModalScreen() {
             let precio_usd = prev.precio_usd;
             const cup = parseNumber(cleaned);
             if (cup != null && cambioMoneda && cambioMoneda > 0) {
-                precio_usd = String((cup / cambioMoneda).toFixed(2));
+                precio_usd = String((cup / cambioMoneda).toFixed(5));
             } else if (cleaned === '') {
                 precio_usd = '';
             }
@@ -181,7 +184,7 @@ export default function ProductoModalScreen() {
             let precio_cup = prev.precio_cup;
             const usd = parseNumber(cleaned);
             if (usd != null && cambioMoneda && cambioMoneda > 0) {
-                precio_cup = String(Math.round((usd * cambioMoneda) * 100) / 100);
+                precio_cup = String(Math.round((usd * cambioMoneda) * 100000) / 100000);
             } else if (cleaned === '') {
                 precio_cup = '';
             }
@@ -220,6 +223,7 @@ export default function ProductoModalScreen() {
     const handleBack = () => router.back();
 
     const handleSave = async () => {
+        setIsSaving(true);
         try {
             const raw = await AsyncStorage.getItem('@config');
             if (!raw) {
@@ -322,6 +326,8 @@ export default function ProductoModalScreen() {
         } catch (error) {
             console.error('Error guardando producto:', error);
             Alert.alert('Error de conexión', 'No se pudo conectar con el servidor');
+        } finally{
+            setIsSaving(false);
         }
     };
 
@@ -373,6 +379,15 @@ export default function ProductoModalScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 80}>
             <View style={styles.container}>
                 <TopBar />
+
+                {isSaving && (
+                                        <Modal transparent={true} visible={isSaving} animationType="fade">
+                                            <View style={styles.loadingOverlay}>
+                                                <ActivityIndicator size="large" color="#fff" />
+                                            </View>
+                                        </Modal>
+                                    )}
+
                 <ScrollView contentContainerStyle={[styles.scrollContentContainer, { paddingBottom: Spacing.page }]} keyboardShouldPersistTaps="handled">
                     <View style={styles.header}>
                         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
@@ -588,6 +603,17 @@ const styles = StyleSheet.create({
         padding: Spacing.m,
         borderRadius: 8,
         marginTop: Spacing.s
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2000,
     },
     infoRow: {
         flexDirection: 'row',

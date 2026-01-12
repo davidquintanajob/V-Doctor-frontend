@@ -13,7 +13,8 @@ import {
   UIManager,
   ToastAndroid,
   Alert,
-  Modal
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -48,6 +49,7 @@ export default function VentaModalScreen() {
     ,exedente_redondeo: ventaParam?.exedente_redondeo != null ? String(ventaParam.exedente_redondeo) : '0'
   }));
 
+  const [isSaving, setIsSaving] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showScannerModal, setShowScannerModal] = useState(false);
   const isEditable = mode !== 'ver';
@@ -388,6 +390,7 @@ export default function VentaModalScreen() {
   };
 
   const handleSave = async () => {
+    setIsSaving(true)
     // Validaciones previas: comerciable obligatorio y al menos un usuario asignado
     const idComerciableNow = ventaData.comerciable_id ?? ventaParam?.id_comerciable ?? ventaParam?.comerciable?.id_comerciable ?? ventaParam?.comerciable?.id ?? null;
     if (!idComerciableNow || Number(idComerciableNow) === 0) {
@@ -622,6 +625,8 @@ export default function VentaModalScreen() {
       router.back();
     } catch (error) {
       Alert.alert('Error de conexión', 'No se pudo conectar con el servidor');
+    }finally{
+      setIsSaving(false);
     }
   };
 
@@ -633,6 +638,15 @@ export default function VentaModalScreen() {
       enabled
     >
       <TopBar />
+
+      {isSaving && (
+                              <Modal transparent={true} visible={isSaving} animationType="fade">
+                                  <View style={styles.loadingOverlay}>
+                                      <ActivityIndicator size="large" color="#fff" />
+                                  </View>
+                              </Modal>
+                          )}
+
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
@@ -1289,6 +1303,17 @@ const styles = StyleSheet.create({
     height: 24,
     tintColor: '#fff',
   },
+  loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2000,
+    },
   summaryValue: {
     fontSize: Typography.body,
     fontWeight: 'normal',

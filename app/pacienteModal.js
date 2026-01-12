@@ -93,9 +93,10 @@ export default function PacienteModalScreen() {
     const [sexoSeleccionado, setSexoSeleccionado] = useState(pacienteData.sexo || null);
 
     const [loadedImageUri, setLoadedImageUri] = useState(null);
-    
+
     // Camera / Gallery states (use expo-camera + expo-media-library like historia_clinicaModal)
     const cameraRef = useRef(null);
+    const [isSaving, setIsSaving] = useState(false);
     // Guards to avoid opening multiple times
     const isCameraOpeningRef = useRef(false);
     const isGalleryOpeningRef = useRef(false);
@@ -264,27 +265,27 @@ export default function PacienteModalScreen() {
         }
     };
 
-        // Función para comprimir imágenes sin pérdida de calidad visible (copiada de historia_clinicaModal)
-        const comprimirImagen = async (uri) => {
-            try {
-                const fileInfo = await FileSystem.getInfoAsync(uri);
-                const sizeBefore = fileInfo.size;
+    // Función para comprimir imágenes sin pérdida de calidad visible (copiada de historia_clinicaModal)
+    const comprimirImagen = async (uri) => {
+        try {
+            const fileInfo = await FileSystem.getInfoAsync(uri);
+            const sizeBefore = fileInfo.size;
 
-                const result = await ImageManipulator.manipulateAsync(
-                    uri,
-                    [{ resize: { width: 1024 } }],
-                    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-                );
+            const result = await ImageManipulator.manipulateAsync(
+                uri,
+                [{ resize: { width: 1024 } }],
+                { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+            );
 
-                const compressedFileInfo = await FileSystem.getInfoAsync(result.uri);
-                const sizeAfter = compressedFileInfo.size;
+            const compressedFileInfo = await FileSystem.getInfoAsync(result.uri);
+            const sizeAfter = compressedFileInfo.size;
 
-                return { uri: result.uri, base64: result.base64, width: result.width, height: result.height };
-            } catch (error) {
-                console.error('Error en compresión de imagen:', error);
-                throw error;
-            }
-        };
+            return { uri: result.uri, base64: result.base64, width: result.width, height: result.height };
+        } catch (error) {
+            console.error('Error en compresión de imagen:', error);
+            throw error;
+        }
+    };
 
     const clampDescuento = (value) => {
         const num = Number(value || 0);
@@ -309,7 +310,7 @@ export default function PacienteModalScreen() {
                     const cacheBustedUrl = `${imageUrl}${imageUrl.includes('?') ? '&' : '?'}t=${Date.now()}`;
 
                     // Forzar uso de la imagen de la API: limpiar cualquier foto local tomada anteriormente
-                    
+
                     setPhotoUri(null);
                     setImagenBase64(null);
 
@@ -317,7 +318,7 @@ export default function PacienteModalScreen() {
 
                     // Verificar que la imagen existe
                     const response = await fetch(cacheBustedUrl, { method: 'HEAD' });
-                    
+
                     if (!response.ok) {
                         console.warn('[PacienteModal] La imagen remota no existe o devolvió error:', response.status);
                         setLoadedImageUri(null);
@@ -526,6 +527,7 @@ export default function PacienteModalScreen() {
     };
 
     const handleSave = async () => {
+        setIsSaving(true);
         try {
             const raw = await AsyncStorage.getItem('@config');
             if (!raw) throw new Error('No hay configuración de API');
@@ -590,6 +592,9 @@ export default function PacienteModalScreen() {
         } catch (err) {
             console.error(err);
             Alert.alert('Error', err.message || 'No se pudo guardar el paciente');
+        } finally {
+            // Ocultar overlay en cualquier caso (error o éxito)
+            setIsSaving(false);
         }
     };
 
@@ -809,6 +814,13 @@ export default function PacienteModalScreen() {
     return (
         <View style={{ flex: 1 }}>
             <TopBar onMenuNavigate={() => { }} />
+            {isSaving && (
+                <Modal transparent={true} visible={isSaving} animationType="fade">
+                    <View style={styles.loadingOverlay}>
+                        <ActivityIndicator size="large" color="#fff" />
+                    </View>
+                </Modal>
+            )}
             <CameraModal />
             <GalleryModal />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -1044,7 +1056,7 @@ export default function PacienteModalScreen() {
 
                                 {/* Mostrar la nueva foto tomada O la imagen cargada */}
                                 {(photoUri || loadedImageUri) && (
-                                    <View style={[styles.photoPreviewContainer, { position: 'relative' }] }>
+                                    <View style={[styles.photoPreviewContainer, { position: 'relative' }]}>
                                         <Image
                                             // Preferir la foto recién tomada/seleccionada (`photoUri`) sobre la remota (`loadedImageUri`)
                                             source={{ uri: (photoUri || loadedImageUri) }}
@@ -1681,6 +1693,17 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         borderRadius: 8,
         marginTop: Spacing.s,
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2000,
     },
     cameraPermissionButtonText: {
         color: '#fff',

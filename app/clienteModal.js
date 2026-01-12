@@ -13,13 +13,17 @@ import {
     TouchableWithoutFeedback,
     Keyboard,
     Linking,
-    ToastAndroid
+    ToastAndroid,
+    ActivityIndicator,
+    Modal
+    ,
+    Image
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TopBar from '../components/TopBar';
 import DropdownGenerico from '../components/DropdownGenerico';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
-import { Image } from 'react-native';
+// Image is available from the main react-native import above
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -69,6 +73,7 @@ export default function ClienteModalScreen() {
     const [descuento, setDescuento] = useState('');
     const [photoUri, setPhotoUri] = useState(null);
     const [agresividad, setAgresividad] = useState(0);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Estado para lista de pacientes y estado/razón (Adoptado / Fallecido / Comprado)
     const [estadoPaciente, setEstadoPaciente] = useState(''); // '', 'Adoptado','Fallecido','Comprado'
@@ -313,6 +318,8 @@ export default function ClienteModalScreen() {
     };
 
     const handleSave = async () => {
+        // Mostrar overlay de guardado inmediatamente
+        setIsSaving(true);
         // Verificar configuración de API (igual que en login.js)
         try {
             const rawConfig = await AsyncStorage.getItem('@config');
@@ -464,6 +471,9 @@ export default function ClienteModalScreen() {
             } else {
                 Alert.alert('Error', err.message || 'Error en la petición');
             }
+        } finally {
+            // Ocultar overlay en cualquier caso (error o éxito)
+            setIsSaving(false);
         }
     };
 
@@ -592,6 +602,14 @@ export default function ClienteModalScreen() {
             <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
                 <View style={styles.container}>
                     <TopBar onMenuNavigate={handleMenuNavigate} />
+
+                    {isSaving && (
+                        <Modal transparent={true} visible={isSaving} animationType="fade">
+                            <View style={styles.loadingOverlay}>
+                                <ActivityIndicator size="large" color="#fff" />
+                            </View>
+                        </Modal>
+                    )}
 
                     <ScrollView
                         style={styles.scrollContent}
@@ -1187,6 +1205,17 @@ const styles = StyleSheet.create({
     colorPickerContainer: {
         position: 'relative',
         zIndex: 1001, // ← AÑADE ESTO, más alto que el dropdown
+    },
+    loadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2000,
     },
     colorButton: {
         width: 40,

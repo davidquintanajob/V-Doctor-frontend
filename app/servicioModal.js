@@ -10,7 +10,9 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
-  Image
+  Image,
+  Modal,
+  ActivityIndicator
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -42,6 +44,7 @@ export default function ServicioModalScreen() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [ventasPage, setVentasPage] = useState(1);
   const itemsPerPage = 10;
+  const [isSaving, setIsSaving] = useState(false);
 
   const ventasList = servicioParam?.comerciable?.venta || [];
   const isEditable = mode !== 'ver';
@@ -129,6 +132,7 @@ export default function ServicioModalScreen() {
   const handleBack = () => router.back();
 
   const handleSave = async () => {
+    setIsSaving(true);
     if (!servicioData.descripcion) {
       Alert.alert('Validación', 'Descripción es requerida');
       return;
@@ -195,6 +199,8 @@ export default function ServicioModalScreen() {
     } catch (e) {
       console.error(e);
       Alert.alert('Error', 'No se pudo guardar');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -232,6 +238,13 @@ export default function ServicioModalScreen() {
     >
       <View style={styles.container}>
         <TopBar onMenuNavigate={() => { }} />
+        {isSaving && (
+          <Modal transparent={true} visible={isSaving} animationType="fade">
+            <View style={styles.loadingOverlay}>
+              <ActivityIndicator size="large" color="#fff" />
+            </View>
+          </Modal>
+        )}
         <ScrollView
           contentContainerStyle={[styles.scrollContentContainer, { paddingBottom: Spacing.page }]}
           keyboardShouldPersistTaps="handled"
@@ -442,6 +455,17 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     minHeight: 44,
     marginBottom: Spacing.m,
+  },
+  loadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
   },
   disabledInput: {
     backgroundColor: '#f5f5f5',
