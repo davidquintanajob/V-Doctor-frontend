@@ -17,7 +17,7 @@ export default function CambioMonedaScreen() {
   const [confirmDisabled, setConfirmDisabled] = useState(true);
   const [modalShowInfo, setModalShowInfo] = useState(false);
   const [countdownSeconds, setCountdownSeconds] = useState(0);
-  const [costoFormula, setCostoFormula] = useState('');
+  const [costoFormula, setCostoFormula] = useState('Promedio ponderado');
   const timerRef = useRef(null);
   const [roundOption, setRoundOption] = useState('');
   const [isRedondeoFromPlus, setIsRedondeoFromPlus] = useState(false);
@@ -355,12 +355,7 @@ export default function CambioMonedaScreen() {
               <Text style={[styles.tipoText, costoFormula === 'Promedio ponderado' && styles.tipoTextSelected]}>Promedio ponderado</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.tipoBox, costoFormula === 'Primero en entrar, primero en salir' && styles.tipoBoxSelected]}
-              onPress={() => setCostoFormula('Primero en entrar, primero en salir')}
-            >
-              <Text style={[styles.tipoText, costoFormula === 'Primero en entrar, primero en salir' && styles.tipoTextSelected]}>Primero en entrar, primero en salir</Text>
-            </TouchableOpacity>
+            {/* La opción FIFO está deshabilitada en esta versión; sólo se permite Promedio ponderado */}
           </View>
         </View>
 

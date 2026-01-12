@@ -9,7 +9,8 @@ import {
     ToastAndroid,
     Alert,
     Platform,
-    Image
+    Image,
+    Modal
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import TopBar from '../components/TopBar';
@@ -33,12 +34,108 @@ export default function AddEntradaScreen() {
     const [costo_cup, setCostoCUP] = useState('0');
     const [costo_usd, setCostoUSD] = useState('0');
     const [comerciableBusqueda, setComercialeBusqueda] = useState('');
+    const [costoFormula, setCostoFormula] = useState(null);
+
+    // Modal & pending save state
+    const [modalVisible, setModalVisible] = useState(false);
+    const [modalTestValue, setModalTestValue] = useState(null);
+    const [pendingRequest, setPendingRequest] = useState(null);
 
     // Calcular costos totales auxiliares
     const calcularCostoTotalCUP = () => {
         const cant = parseNumber(cantidad) || 0;
         const costoUnit = parseNumber(costo_cup) || 0;
         return String(Math.round(cant * costoUnit * 100) / 100);
+    };
+
+    // Al confirmar en el modal: opcionalmente actualizar producto (PUT) con los costos calculados,
+    // luego crear la entrada (POST) con el body original (valores ingresados por el usuario).
+    const proceedWithSave = async (applyTestValue) => {
+        if (!pendingRequest) return;
+        try {
+            // Si el usuario escogió aplicar la fórmula, calcular y llamar al endpoint UpdateProducto
+            if (applyTestValue && (costoFormula === 'Promedio ponderado' || costoFormula === 'Primero en entrar, primero en salir')) {
+                let newCosts = null;
+                if (costoFormula === 'Promedio ponderado') {
+                    newCosts = getCostoPromedioPonderado();
+                } else {
+                    newCosts = await getCostoFIFOTest();
+                }
+
+                const prodId = selectedComerciable?.id_comerciable || selectedComerciable?.id;
+                if (!prodId) {
+                    Alert.alert('Error', 'No se pudo obtener el id del producto para actualizar');
+                    return;
+                }
+
+                const updateUrl = `${apiHost.replace(/\/+$/, '')}/producto/UpdateProducto/${prodId}`;
+                const updateHeaders = { 'Content-Type': 'application/json' };
+                if (pendingRequest.headers && pendingRequest.headers.Authorization) updateHeaders.Authorization = pendingRequest.headers.Authorization;
+                else if (token) updateHeaders.Authorization = `Bearer ${token}`;
+
+                const updateBody = {
+                    costo_usd: Number(newCosts.costo_usd) || 0,
+                    costo_cup: Number(newCosts.costo_cup) || 0
+                };
+
+                const updRes = await fetch(updateUrl, { method: 'PUT', headers: updateHeaders, body: JSON.stringify(updateBody) });
+                if (updRes.status === 403) { setModalVisible(false); router.replace('/login'); return; }
+                const updRespData = await updRes.json().catch(() => null);
+                if (!updRes.ok) {
+                    let errorMessage = 'Error desconocido';
+                    if (updRespData && updRespData.errors && Array.isArray(updRespData.errors)) {
+                        errorMessage = updRespData.errors.join('\n• ');
+                    } else if (updRespData && typeof updRespData.error === 'string') {
+                        errorMessage = updRespData.error;
+                    } else if (updRespData && (updRespData.message || updRespData.description)) {
+                        errorMessage = updRespData.message || updRespData.description;
+                    } else if (updRespData) {
+                        errorMessage = JSON.stringify(updRespData);
+                    }
+                    Alert.alert(`Error ${updRes.status}`, errorMessage);
+                    return;
+                }
+            }
+
+            // Luego crear la entrada usando el body original
+            const { url, headers, body } = pendingRequest;
+            const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+            if (res.status === 403) { setModalVisible(false); router.replace('/login'); return; }
+            const responseData = await res.json().catch(() => null);
+            if (!res.ok) {
+                let errorMessage = 'Error desconocido';
+                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
+                    errorMessage = responseData.errors.join('\n• ');
+                } else if (responseData && typeof responseData.error === 'string') {
+                    errorMessage = responseData.error;
+                } else if (responseData && (responseData.message || responseData.description)) {
+                    errorMessage = responseData.message || responseData.description;
+                } else if (responseData) {
+                    errorMessage = JSON.stringify(responseData);
+                }
+                Alert.alert(`Error ${res.status}`, errorMessage);
+                setModalVisible(false);
+                setPendingRequest(null);
+                return;
+            }
+
+            if (Platform.OS === 'android') {
+                ToastAndroid.show('Entrada creada', ToastAndroid.SHORT);
+            } else {
+                Alert.alert('Éxito', 'Entrada creada');
+            }
+
+            try { eventBus.emit('refreshProductosMedicamentos'); } catch (e) { }
+            setModalVisible(false);
+            setPendingRequest(null);
+            router.back();
+
+        } catch (error) {
+            console.error('Error en proceedWithSave:', error);
+            Alert.alert('Error de conexión', 'No se pudo conectar con el servidor');
+            setModalVisible(false);
+            setPendingRequest(null);
+        }
     };
 
     const calcularCostoTotalUSD = () => {
@@ -61,6 +158,15 @@ export default function AddEntradaScreen() {
                     if (cambioRaw) {
                         const num = Number(String(cambioRaw).replace(/,/g, '.'));
                         if (!isNaN(num) && num > 0) setCambioMoneda(num);
+                    }
+                    try {
+                        const redondeoRaw = await AsyncStorage.getItem('@redondeoConfig');
+                        if (redondeoRaw) {
+                            const rc = JSON.parse(redondeoRaw);
+                            if (rc && typeof rc.costoFormula === 'string') setCostoFormula(rc.costoFormula);
+                        }
+                    } catch (e) {
+                        console.log('Error reading @redondeoConfig', e);
                     }
                 } catch (e) {
                     console.log('Error reading @CambioMoneda', e);
@@ -86,6 +192,116 @@ export default function AddEntradaScreen() {
             setCostoUSD(String((cup / cambioMoneda).toFixed(2)));
         } else if (cleaned === '') {
             setCostoUSD('');
+        }
+    };
+
+    // Métodos de prueba para calcular costo según la fórmula
+    const getCostoPromedioPonderado = () => {
+        try {
+            const cantActual = parseNumber(selectedComerciable?.producto?.cantidad) || 0;
+            const cppActual = parseNumber(selectedComerciable?.producto?.costo_cup) || 0;
+            const cantEntrada = parseNumber(cantidad) || 0;
+            const costoEntrada = parseNumber(costo_cup) || 0;
+
+            const denom = (cantActual + cantEntrada);
+            let cppCup = 0;
+            if (denom > 0) {
+                cppCup = ((cantActual * cppActual) + (cantEntrada * costoEntrada)) / denom;
+            } else {
+                cppCup = costoEntrada || cppActual || 0;
+            }
+
+            // Cambiado de 100 a 100000 para redondear a 5 decimales
+            const cppCupRounded = Math.round(cppCup * 100000) / 100000;
+
+            // Cambiado toFixed(2) a toFixed(5) para mostrar 5 decimales
+            const costoUsd = (cambioMoneda && cambioMoneda > 0)
+                ? String((cppCupRounded / cambioMoneda).toFixed(5))
+                : '0.00000';
+
+            return {
+                costo_cup: String(cppCupRounded.toFixed(5)),
+                costo_usd: costoUsd
+            };
+        } catch (e) {
+            return {
+                costo_cup: '0.00000',
+                costo_usd: '0.00000'
+            };
+        }
+    };
+
+    const getCostoFIFOTest = async () => {
+        try {
+            const prodId = selectedComerciable?.id_comerciable || selectedComerciable?.id;
+            if (!prodId) return { costo_cup: '0.00', costo_usd: '0.00' };
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (token) headers.Authorization = `Bearer ${token}`;
+
+            const entradasUrl = `${apiHost.replace(/\/+$/, '')}/entrada/comerciable/${prodId}`;
+            const ventasUrl = `${apiHost.replace(/\/+$/, '')}/venta/comerciable/${prodId}`;
+
+            const [entradasRes, ventasRes] = await Promise.all([
+                fetch(entradasUrl, { method: 'GET', headers }),
+                fetch(ventasRes ? ventasUrl : ventasUrl, { method: 'GET', headers })
+            ]);
+
+            const entradas = await entradasRes.json().catch(() => []);
+            const ventas = await ventasRes.json().catch(() => []);
+
+            // Normalize entradas: each layer {cantidad, costo_cup}
+            const layers = (Array.isArray(entradas) ? entradas : []).map(e => ({
+                cantidad: Number(e.cantidad) || 0,
+                costo_cup: (e.costo_cup != null) ? Number(e.costo_cup) : (Number(e.producto?.costo_cup) || 0),
+                fecha: e.fecha ? new Date(e.fecha) : null
+            })).sort((a,b) => (a.fecha||0) - (b.fecha||0));
+
+            // Sort ventas chronologically
+            const sales = (Array.isArray(ventas) ? ventas : []).map(v => ({
+                cantidad: Number(v.cantidad) || 0,
+                fecha: v.fecha ? new Date(v.fecha) : null
+            })).sort((a,b) => (a.fecha||0) - (b.fecha||0));
+
+            // Apply sales to layers (FIFO consumption)
+            let layersCopy = layers.map(l => ({ ...l }));
+            for (const s of sales) {
+                let qtyToConsume = s.cantidad;
+                for (let i = 0; i < layersCopy.length && qtyToConsume > 0; i++) {
+                    const layer = layersCopy[i];
+                    if (layer.cantidad <= 0) continue;
+                    const take = Math.min(layer.cantidad, qtyToConsume);
+                    layer.cantidad -= take;
+                    qtyToConsume -= take;
+                }
+            }
+
+            // After consumption, append new incoming entry (the current entrada being created)
+            const entradaCantidad = parseNumber(cantidad) || 0;
+            const entradaCostoCup = parseNumber(costo_cup) || 0;
+            if (entradaCantidad > 0) {
+                layersCopy.push({ cantidad: entradaCantidad, costo_cup: entradaCostoCup });
+            }
+
+            // Compute weighted average cost across remaining layers
+            let totalQty = 0;
+            let totalCost = 0;
+            for (const l of layersCopy) {
+                if (l.cantidad > 0) {
+                    totalQty += l.cantidad;
+                    totalCost += l.cantidad * (Number(l.costo_cup) || 0);
+                }
+            }
+
+            let cppCup = 0;
+            if (totalQty > 0) cppCup = totalCost / totalQty;
+            const cppCupRounded = Math.round(cppCup * 100000) / 100000;
+            const costoUsd = (cambioMoneda && cambioMoneda > 0) ? String((cppCupRounded / cambioMoneda).toFixed(5)) : '0.00000';
+
+            return { costo_cup: String(cppCupRounded.toFixed(5)), costo_usd: costoUsd };
+        } catch (e) {
+            console.error('Error getCostoFIFOTest', e);
+            return { costo_cup: '0.00000', costo_usd: '0.00000' };
         }
     };
 
@@ -140,32 +356,18 @@ export default function AddEntradaScreen() {
             const headers = { 'Content-Type': 'application/json' };
             if (tokenLocal) headers['Authorization'] = `Bearer ${tokenLocal}`;
 
-            const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-            if (res.status === 403) { router.replace('/login'); return; }
-            const responseData = await res.json().catch(() => null);
-            if (!res.ok) {
-                let errorMessage = 'Error desconocido';
-                if (responseData && responseData.errors && Array.isArray(responseData.errors)) {
-                    errorMessage = responseData.errors.join('\n• ');
-                } else if (responseData && typeof responseData.error === 'string') {
-                    errorMessage = responseData.error;
-                } else if (responseData && (responseData.message || responseData.description)) {
-                    errorMessage = responseData.message || responseData.description;
-                } else if (responseData) {
-                    errorMessage = JSON.stringify(responseData);
-                }
-                Alert.alert(`Error ${res.status}`, errorMessage);
-                return;
+            // Preparar petición pendiente y mostrar modal para preguntar si desea modificar costos
+            let testValue = null;
+            if (costoFormula === 'Promedio ponderado') {
+                testValue = getCostoPromedioPonderado();
+            } else if (costoFormula === 'Primero en entrar, primero en salir') {
+                testValue = await getCostoFIFOTest();
             }
 
-            if (Platform.OS === 'android') {
-                ToastAndroid.show('Entrada creada', ToastAndroid.SHORT);
-            } else {
-                Alert.alert('Éxito', 'Entrada creada');
-            }
-
-            try { eventBus.emit('refreshProductosMedicamentos'); } catch (e) { }
-            router.back();
+            setModalTestValue(testValue);
+            setPendingRequest({ url, headers, body });
+            setModalVisible(true);
+            return;
 
         } catch (error) {
             console.error('Error creando entrada:', error);
@@ -232,6 +434,26 @@ export default function AddEntradaScreen() {
                     <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
                         <Text style={styles.saveButtonText}>Crear Entrada</Text>
                     </TouchableOpacity>
+                    <Modal visible={modalVisible} transparent animationType="fade">
+                        <View style={styles.modalOverlay}>
+                            <View style={styles.modalBox}>
+                                <Text style={styles.modalTitle}>Modificar costos según fórmula</Text>
+                                <Text style={styles.modalText}>{selectedComerciable ? (selectedComerciable.producto?.nombre || selectedComerciable.nombre) : ''}</Text>
+                                <Text style={styles.modalText}>Fórmula: {costoFormula || 'N/A'}</Text>
+                                <Text style={styles.modalText}>Valor sugerido: {modalTestValue ? `CUP ${modalTestValue.costo_cup} — USD ${modalTestValue.costo_usd}` : 'N/A'}</Text>
+                                <Text style={[styles.modalText, styles.modalCurrentLabel]}>Valor actual:</Text>
+                                <Text style={styles.modalText}>CUP {String(selectedComerciable?.producto?.costo_cup ?? selectedComerciable?.costo_cup ?? '0.00')} — USD {String(selectedComerciable?.producto?.costo_usd ?? selectedComerciable?.costo_usd ?? '0.00')}</Text>
+                                <View style={styles.modalButtons}>
+                                    <TouchableOpacity style={styles.modalButton} onPress={() => proceedWithSave(true)}>
+                                        <Text style={styles.modalButtonText}>Modificar</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity style={styles.modalButtonAux} onPress={() => proceedWithSave(false)}>
+                                        <Text style={styles.modalButtonText}>No modificar</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    </Modal>
                 </View>
             </ScrollView>
         </View>
@@ -249,4 +471,15 @@ const styles = StyleSheet.create({
     disabledInput: { backgroundColor: '#f5f5f5' },
     saveButton: { backgroundColor: Colors.boton_azul, paddingVertical: Spacing.m, paddingHorizontal: Spacing.m, borderRadius: 8, alignItems: 'center', marginTop: Spacing.m, borderWidth: 1, borderColor: '#000' },
     saveButtonText: { color: '#fff', fontSize: Typography.body, fontWeight: '600' }
+    ,
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    modalBox: { backgroundColor: '#fff', padding: Spacing.m, borderRadius: 8, width: '90%' },
+    modalTitle: { fontSize: Typography.h4 || 18, fontWeight: '700', marginBottom: Spacing.s },
+    modalText: { fontSize: Typography.body, marginBottom: Spacing.xs },
+    modalButtons: { flexDirection: 'row', justifyContent: 'space-between', marginTop: Spacing.m },
+    modalButton: { flex: 1, paddingVertical: Spacing.s, backgroundColor: Colors.boton_azul, borderRadius: 8, marginHorizontal: 4, alignItems: 'center' },
+    modalButtonAux: { flex: 1, paddingVertical: Spacing.s, backgroundColor: Colors.boton_rojo_opciones, borderRadius: 8, marginHorizontal: 4, alignItems: 'center' },
+    modalButtonText: { color: '#fff', fontWeight: '700' }
+    ,
+    modalCurrentLabel: { fontWeight: '700', marginTop: Spacing.s }
 });

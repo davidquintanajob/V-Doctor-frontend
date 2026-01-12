@@ -34,7 +34,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'productosMedicamentos', rolVisible: ["Administrador", "Médico", "Técnico"] },
     { name: 'Usuarios del sistema', icon: require('../assets/images/user.png'), link: 'usuarios', rolVisible: ['Administrador'] },
     { name: 'Informes', icon: require('../assets/images/bar-chart.png'), link: 'NoDisponible', rolVisible: ['Administrador'], enDesarrollo: true },
-    { name: 'Cambio moneda CUP - USD', icon: require('../assets/images/exchange.png'), link: 'cambioMoneda', rolVisible: ['Administrador'] },
+    { name: 'Configuraciones del administrador', icon: require('../assets/images/exchange.png'), link: 'cambioMoneda', rolVisible: ['Administrador'] },
     { name: 'Configuración', icon: require('../assets/images/config.png'), link: 'config', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
   ];
 
