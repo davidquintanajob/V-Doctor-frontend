@@ -211,7 +211,7 @@ const MedicamentosLista = forwardRef(({ isEditable = true, initial = [], onChang
                         <View style={styles.autocompleteContainer}>
                             <ApiAutocomplete
                                 endpoint="/medicamento/filter/5/1"
-                                body={{ nombre: '' }}
+                                body={{ nombre: '', isStockDisponible: true }}
                                 displayFormat={(it) => `${it.producto?.nombre || ''} - ${it.unidad_medida || ''} - $ ${it.producto?.comerciable?.precio_cup ?? ''}`}
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar medicamento..."

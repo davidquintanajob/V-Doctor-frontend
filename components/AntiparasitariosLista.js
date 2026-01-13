@@ -204,7 +204,7 @@ const AntiparasitariosLista = forwardRef(({ isEditable = true, initial = [], onC
                         <View style={styles.autocompleteContainer}>
                             <ApiAutocomplete
                                 endpoint="/medicamento/filter/5/1"
-                                body={{ nombre: '', tipo_medicamento: 'antiparasitario' }}
+                                body={{ nombre: '', tipo_medicamento: 'antiparasitario', isStockDisponible: true }}
                                 displayFormat={(it) => `${it.producto?.nombre || ''} - ${it.unidad_medida || ''} - $ ${it.producto?.comerciable?.precio_cup ?? ''}`}
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar antiparasitario..."

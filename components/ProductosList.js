@@ -300,7 +300,7 @@ const ProductosList = forwardRef(({ isEditable = true, initial = [], onChange },
                         <View style={styles.autocompleteContainer}>
                             <ApiAutocomplete
                                 endpoint="/producto/filter/5/1"
-                                body={{ nombre: '' }}
+                                body={{ nombre: '', isStockDisponible: true }}
                                 displayFormat={(it) => `${it.nombre || ''} - ${it.categoria || ''} - $ ${it.comerciable?.precio_cup ?? ''}`}
                                 onItemSelect={(it) => handleSelect(entry.id, it)}
                                 placeholder="Buscar producto..."
