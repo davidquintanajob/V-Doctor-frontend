@@ -2,6 +2,7 @@ import React, { useState, forwardRef, useImperativeHandle, useRef } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Image } from 'react-native';
 import { Colors, Spacing, Typography } from '../variables';
 import ApiAutocomplete from './ApiAutocomplete';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }, ref) => {
     const [items, setItems] = useState(initial || []);
@@ -34,6 +35,42 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         getTotals: () => computeTotalsFromItems(items),
     }));
 
+    // Extraer lista de usuarios desde el campo `usuarios` y normalizar a array de objetos
+    const extractUsers = (entry) => {
+        if (!entry) return [];
+
+        // Priorizar exactamente `usuarios`, con algunos fallbacks si está anidado
+        const raw = entry.usuarios ?? entry.selected?.usuarios ?? entry.selected?.producto?.usuarios ?? null;
+        if (raw == null) return [];
+
+        // Si ya es un array
+        if (Array.isArray(raw)) {
+            // Si es array de strings, convertir a objetos con `nombre_usuario`
+            if (raw.length > 0 && typeof raw[0] === 'string') {
+                return raw.map(s => ({ nombre_usuario: s }));
+            }
+            // Si es array de objetos asumimos que contienen `nombre_usuario`
+            return raw;
+        }
+
+        // Si es string, intentar parsear JSON
+        if (typeof raw === 'string') {
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    if (parsed.length > 0 && typeof parsed[0] === 'string') return parsed.map(s => ({ nombre_usuario: s }));
+                    return parsed;
+                }
+            } catch (e) {
+                // no JSON — seguir a fallback
+            }
+
+            // Fallback: lista separada por comas de nombres de usuario
+            return raw.split(',').map(s => ({ nombre_usuario: s.trim() })).filter(x => x.nombre_usuario);
+        }
+
+        return [];
+    };
     // Notificar cambios al padre cuando items cambian
     React.useEffect(() => {
         if (typeof onChange === 'function') {
@@ -46,11 +83,29 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         setItems(initial || []);
     }, [initial]);
 
+    // Cargar nombre de usuario desde AsyncStorage al montar
+    React.useEffect(() => {
+        (async () => {
+            try {
+                let raw = await AsyncStorage.getItem('@config');
+                if (!raw) return;
+                let parsed = null;
+
+                try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+                const nombre = parsed.usuario.nombre_usuario ?? null;
+                if (nombre) setCurrentUserName(nombre);
+            } catch (e) {
+                // ignore
+            }
+        })();
+    }, []);
+
     const autocompleteRefs = useRef({});
     const [lastAddedId, setLastAddedId] = useState(null);
+    const [currentUserName, setCurrentUserName] = useState(null);
 
     const addItem = (afterId = null) => {
-        const newId = `${Date.now()}_${Math.random().toString(36).substr(2,5)}`;
+        const newId = `${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
         const newItem = {
             id: newId,
             selected: null,
@@ -71,7 +126,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
     };
 
     const removeItem = (id) => {
-        try { delete autocompleteRefs.current[id]; } catch (e) {}
+        try { delete autocompleteRefs.current[id]; } catch (e) { }
         setItems(prev => prev.filter(v => v.id !== id));
     };
 
@@ -83,7 +138,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         const precio = item?.comerciable?.precio_cup ?? '';
         const precio_original_cup = item.comerciable.precio_cup;
         const precio_original_usd = item.comerciable.precio_usd;
-        
+
         setItems(prev => prev.map(v => v.id === id ? ({
             ...v,
             selected: item,
@@ -100,7 +155,7 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
         const ref = autocompleteRefs.current[lastAddedId];
         if (ref) {
             setTimeout(() => {
-                try { if (typeof ref.focus === 'function') ref.focus(); else if (ref.current && typeof ref.current.focus === 'function') ref.current.focus(); } catch (e) {}
+                try { if (typeof ref.focus === 'function') ref.focus(); else if (ref.current && typeof ref.current.focus === 'function') ref.current.focus(); } catch (e) { }
             }, 50);
         }
         setLastAddedId(null);
@@ -189,6 +244,59 @@ const ServiciosLista = forwardRef(({ isEditable = true, initial = [], onChange }
                         )}
 
                         <View style={styles.itemButtonsRow}>
+                            {/* Botón azul a la extrema derecha; se deshabilita si existe lista de usuarios y coincide el nombre en AsyncStorage */}
+                            {(() => {
+                                const users = extractUsers(entry);
+                                let disabledForCurrent = users.length > 0 && currentUserName && users.some(u => (u.nombre_usuario || u.name || u.usuario) === currentUserName);
+                                if (users.length === 0)
+                                    disabledForCurrent = true;
+                                return (
+                                    <TouchableOpacity
+                                        style={[styles.actionButtonBlue, (disabledForCurrent || !isEditable) && styles.buttonDisabled, { marginLeft: Spacing.s }]}
+                                        onPress={async () => {
+                                            try {
+                                                const raw = await AsyncStorage.getItem('@config');
+                                                if (!raw) {
+                                                    ToastAndroid.show('No se encontró configuración de usuario', ToastAndroid.SHORT);
+                                                    return;
+                                                }
+                                                let parsed = null;
+                                                try { parsed = JSON.parse(raw); } catch (e) { parsed = null; }
+                                                const userObj = parsed?.usuario ?? parsed ?? null;
+                                                if (!userObj) {
+                                                    ToastAndroid.show('Usuario inválido en configuración', ToastAndroid.SHORT);
+                                                    return;
+                                                }
+
+                                                setItems(prev => prev.map(v => {
+                                                    if (v.id !== entry.id) return v;
+                                                    const existing = extractUsers(v) || [];
+                                                    const username = userObj.nombre_usuario || userObj.name || userObj.usuario || null;
+                                                    if (!username) {
+                                                        // si no hay nombre de usuario, no agregar
+                                                        return v;
+                                                    }
+                                                    const already = existing.some(u => (u.nombre_usuario || u.name || u.usuario) === username);
+                                                    if (already) {
+                                                        ToastAndroid.show('Usuario ya en la lista', ToastAndroid.SHORT);
+                                                        return v;
+                                                    }
+                                                    // agregar el objeto tal cual (idealmente incluye id_usuario y nombre_usuario)
+                                                    const next = [...existing, userObj];
+                                                    return { ...v, usuarios: next };
+                                                }));
+
+                                                ToastAndroid.show('Participación registrada', ToastAndroid.SHORT);
+                                            } catch (e) {
+                                                ToastAndroid.show('Error al registrar participación', ToastAndroid.SHORT);
+                                            }
+                                        }}
+                                        disabled={disabledForCurrent || !isEditable}
+                                    >
+                                        <Text style={styles.actionButtonText}>Participé</Text>
+                                    </TouchableOpacity>
+                                );
+                            })()}
                             <TouchableOpacity
                                 style={[styles.addButton, (!isEditable || !entry.selected || idx !== items.length - 1) && styles.buttonDisabled, { marginRight: Spacing.s }]}
                                 onPress={() => addItem(entry.id)}
@@ -298,6 +406,19 @@ const styles = StyleSheet.create({
     itemButtonsRow: {
         flexDirection: 'row',
         justifyContent: 'flex-end',
+    },
+    actionButtonBlue: {
+        backgroundColor: Colors.boton_azul,
+        paddingVertical: 8,
+        marginRight: 10,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#0069d9',
+    },
+    actionButtonText: {
+        color: '#fff',
+        fontWeight: '600',
     },
     deleteButton: {
         backgroundColor: Colors.boton_rojo_opciones || '#c53030',

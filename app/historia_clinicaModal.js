@@ -416,6 +416,7 @@ export default function HistoriaClinicaModalScreen() {
                     serviciosItems.push({
                         id: id,
                         id_venta: venta.id_venta,
+                        usuarios: venta.usuarios,
                         fecha: venta.fecha,
                         selected: comerciable.servicio,
                         precio_cup: venta.precio_cobrado_cup?.toString() || '',
@@ -433,6 +434,7 @@ export default function HistoriaClinicaModalScreen() {
                         const itemData = {
                             id: id,
                             id_venta: venta.id_venta,
+                            usuarios: venta.usuarios,
                             fecha: venta.fecha,
                             selected: {
                                 producto: producto,
@@ -468,6 +470,7 @@ export default function HistoriaClinicaModalScreen() {
                         productosItems.push({
                             id: (venta.id_venta != null) ? String(venta.id_venta) : `${Date.now()}_${index}`,
                             id_venta: venta.id_venta,
+                            usuarios: venta.usuarios,
                             fecha: venta.fecha,
                             selected: producto,
                             codigo: producto.codigo?.toString() || '',
@@ -547,28 +550,80 @@ export default function HistoriaClinicaModalScreen() {
                     }
                 }
 
-                // Si el modal recibió una consulta con ventas, extraer todos los usuarios de todas las ventas
-                // y agregarlos a la preselección (sin duplicados).
+                // Si el modal recibió una consulta con ventas, encontrar los usuarios que están en TODAS las ventas
                 try {
                     if (consultaParam?.venta && Array.isArray(consultaParam.venta)) {
+                        // Array para almacenar conjuntos de IDs de usuarios por cada venta
+                        const usuariosPorVenta = [];
+
+                        // Recorrer todas las ventas
                         for (const venta of consultaParam.venta) {
                             const ventaUsuarios = venta?.usuarios;
                             if (!ventaUsuarios) continue;
 
+                            const idsVentaActual = new Set();
+
                             if (Array.isArray(ventaUsuarios)) {
                                 for (const u of ventaUsuarios) {
                                     const key = u?.id_usuario ?? u?.id;
-                                    if (key == null) continue;
-                                    // Preferir la entidad completa presente en `json` (usuariosDisponibles) si existe
-                                    const foundInAll = json.find(au => au.id_usuario === key || au.id === key);
-                                    initialPreselected.push(foundInAll || u);
+                                    if (key != null) {
+                                        idsVentaActual.add(String(key));
+                                    }
                                 }
                             } else if (typeof ventaUsuarios === 'object') {
                                 const u = ventaUsuarios;
                                 const key = u?.id_usuario ?? u?.id;
                                 if (key != null) {
-                                    const foundInAll = json.find(au => au.id_usuario === key || au.id === key);
-                                    initialPreselected.push(foundInAll || u);
+                                    idsVentaActual.add(String(key));
+                                }
+                            }
+
+                            if (idsVentaActual.size > 0) {
+                                usuariosPorVenta.push(idsVentaActual);
+                            }
+                        }
+
+                        // Si hay al menos una venta con usuarios
+                        if (usuariosPorVenta.length > 0) {
+                            // Empezar con los IDs de la primera venta
+                            let usuariosComunes = usuariosPorVenta[0];
+
+                            // Intersectar con los IDs de las demás ventas
+                            for (let i = 1; i < usuariosPorVenta.length; i++) {
+                                const tempSet = new Set();
+                                for (const id of usuariosComunes) {
+                                    if (usuariosPorVenta[i].has(id)) {
+                                        tempSet.add(id);
+                                    }
+                                }
+                                usuariosComunes = tempSet;
+                            }
+
+                            // Ahora convertir los IDs comunes a objetos de usuario completos
+                            for (const id of usuariosComunes) {
+                                // Buscar el usuario en la lista completa
+                                const foundUser = json.find(u =>
+                                    String(u.id_usuario) === id || String(u.id) === id
+                                );
+
+                                // Si encontramos el usuario en la lista completa, agregarlo
+                                if (foundUser) {
+                                    initialPreselected.push(foundUser);
+                                } else {
+                                    // Si no está en la lista completa pero sí en las ventas,
+                                    // buscar en todas las ventas para obtener sus datos
+                                    for (const venta of consultaParam.venta) {
+                                        const ventaUsuarios = venta?.usuarios;
+                                        if (Array.isArray(ventaUsuarios)) {
+                                            const userFromVenta = ventaUsuarios.find(u =>
+                                                String(u?.id_usuario) === id || String(u?.id) === id
+                                            );
+                                            if (userFromVenta) {
+                                                initialPreselected.push(userFromVenta);
+                                                break;
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -577,7 +632,7 @@ export default function HistoriaClinicaModalScreen() {
                     console.error('Error extracting usuarios from consultaParam.venta', err);
                 }
 
-                // Eliminar duplicados por id_usuario / id y asignar al estado si hay alguno
+                // Eliminar duplicados por id_usuario / id
                 if (initialPreselected.length > 0) {
                     const map = new Map();
                     initialPreselected.forEach(u => {
@@ -586,6 +641,8 @@ export default function HistoriaClinicaModalScreen() {
                     });
                     const merged = Array.from(map.values());
                     if (merged.length > 0) setUsuariosPreseleccionados(merged);
+                } else {
+                    setUsuariosPreseleccionados([]);
                 }
             } catch (error) {
                 console.error('Error fetching usuarios:', error);
@@ -2008,6 +2065,40 @@ export default function HistoriaClinicaModalScreen() {
                 //console.log("Total original: ",totalCobrar);
                 //console.log(`Resultado de esta venta referente ${entry.partePorcientoTotalSuma}% :`, (((entry.partePorcientoTotalSuma) * (userTotals.totalCobrar)) / 100) / (entry.cantidad));
                 //parseFloat(entry.precio_cup || 0) || 0
+                // Obtener todos los id_usuario únicos
+                const idsUsuarios = entry.usuarios.map(usuario => usuario.id_usuario);
+                const idUsuariosOriginales = usuariosPreseleccionados.map(usuario => usuario.id_usuario)
+
+                let nuevaLista = [];
+
+                // 1. Elementos que están en AMBAS listas (se mantienen)
+                for (const elemento of idUsuariosOriginales) {
+                    if (usuariosIds.includes(elemento)) {
+                        nuevaLista.push(elemento);
+                    }
+                }
+
+                // 2. Elementos que están en seleccionados pero NO en originales (se agregan)
+                for (const elemento of usuariosIds) {
+                    if (!idUsuariosOriginales.includes(elemento)) {
+                        nuevaLista.push(elemento);
+                    }
+                }
+
+                // Obtener elementos eliminados
+                const elementosEliminados = idUsuariosOriginales.filter(elemento =>
+                    !usuariosIds.includes(elemento)
+                );
+
+                // Si quieres eliminar duplicados
+                const idsUsuariosUnicos = [...new Set(idsUsuarios)];
+
+                // unir ambas listas sin repetir
+                const listaUnida = [...new Set([...idsUsuariosUnicos, ...nuevaLista])];
+
+                const resultado = listaUnida.filter(elemento =>
+                    !elementosEliminados.includes(elemento)
+                );
 
                 if (userTotals.totalCobrar === null) {
                     precioAux = parseFloat(entry.precio_cup || 0) || 0;
@@ -2027,7 +2118,7 @@ export default function HistoriaClinicaModalScreen() {
                     precio_cobrado_cup: precioAux,
                     forma_pago: (paymentType === 'efectivo') ? 'Efectivo' : 'Transferencia',
                     id_comerciable: parseInt(entry.selected?.producto?.id_comerciable || entry.selected?.id_comerciable || 0, 10) || 0,
-                    id_usuario: usuariosIds || [],
+                    id_usuario: resultado || [],
                 };
             };
 
