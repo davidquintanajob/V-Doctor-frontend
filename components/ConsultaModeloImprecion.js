@@ -102,45 +102,45 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <style>
-            @page { margin: 10px; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-size: 25px; color: #222; margin: 0; padding: 0; }
-            .container { width: 100%; box-sizing: border-box; padding: 10px; }
-            .top-section { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
+            @page { margin: 5px; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; font-size: 12.5px; color: #222; margin: 0; padding: 0; }
+            .container { width: 100%; box-sizing: border-box; padding: 5px; }
+            .top-section { display: flex; width: 100%; align-items: flex-start; justify-content: space-between; margin-bottom: 3px; }
             .left-header { display: flex; align-items: center; flex: 1; }
-            .logo { max-width: 160px; height: auto; filter: grayscale(100%); margin-right: 12px; }
+            .logo { max-width: 80px; height: auto; margin-right: 6px; }
             .doctor-info { flex: 1; }
-            .doctor-label { font-size: 20px; color: #666; }
-            .doctor-name { font-weight: 700; font-size: 23px; color: #222; }
-            .date-container { text-align: right; font-size: 22px; color: #444; }
-            .hr { border-top: 1px solid #ccc; margin: 8px 0; }
-            .patient-info { margin-top: 6px; }
-            .patient-info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+            .doctor-label { font-size: 10px; color: #666; }
+            .doctor-name { font-weight: 700; font-size: 12px; color: #222; }
+            .date-container { text-align: right; font-size: 11px; color: #444; }
+            .hr { border-top: 1px solid #ccc; margin: 4px 0; }
+            .patient-info { margin-top: 3px; }
+            .patient-info-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
             .patient-label { font-weight: 600; color: #444; }
             .patient-value { font-weight: 700; color: #222; }
-            .patient-value-clinic { font-weight: 900; color: #000; font-size: 24px; }
-            .clinical-info { margin-top: 10px; }
-            .clinical-section { margin-bottom: 6px; display: flex; align-items: center; }
-            .clinical-label { font-weight: 700; color: #333; font-size: 20px; margin-right: 8px; min-width: 170px; }
-            .clinical-value-inline { color: #222; font-size: 20px; line-height: 1.2; }
-            .sales-section { margin-top: 10px; }
-            .sales-header { font-weight: 700; font-size: 22px; margin-bottom: 6px; border-bottom: 2px solid #333; padding-bottom: 2px; }
-            .sales-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #eee; }
+            .patient-value-clinic { font-weight: 900; color: #000; font-size: 12px; }
+            .clinical-info { margin-top: 5px; }
+            .clinical-section { margin-bottom: 3px; display: flex; align-items: center; }
+            .clinical-label { font-weight: 700; color: #333; font-size: 10px; margin-right: 4px; min-width: 85px; }
+            .clinical-value-inline { color: #222; font-size: 10px; line-height: 1.2; }
+            .sales-section { margin-top: 5px; }
+            .sales-header { font-weight: 700; font-size: 11px; margin-bottom: 3px; border-bottom: 2px solid #333; padding-bottom: 1px; }
+            .sales-item { display: flex; justify-content: space-between; align-items: center; padding: 2px 0; border-bottom: 1px solid #eee; }
             .sales-item:last-child { border-bottom: none; }
             .item-name { flex: 2; }
             .item-qty { flex: 1; text-align: center; }
-            .item-nota { flex: 1; text-align: center; font-size: 18px; color: #666; font-style: italic; }
-            .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 6px; border-top: 2px solid #333; font-size: 22px; }
-            .signature-section { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; padding-top: 13px; border-top: 1px solid #ccc; }
-            .firma { width: 126px; height: auto; filter: grayscale(100%); }
+            .item-nota { flex: 1; text-align: center; font-size: 9px; color: #666; font-style: italic; }
+            .total-row { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; padding-top: 3px; border-top: 2px solid #333; font-size: 11px; }
+            .signature-section { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 7px; border-top: 1px solid #ccc; }
+            .firma { width: 63px; height: auto; }
             .sales-header { 
                 display: flex; 
                 justify-content: space-between; 
                 align-items: center; 
-                padding: 6px 0; 
-                margin-bottom: 8px; 
+                padding: 3px 0; 
+                margin-bottom: 4px; 
                 border-bottom: 2px solid #333; 
                 font-weight: 700; 
-                font-size: 25px; 
+                font-size: 12px; 
             }
             .header-name { 
                 flex: 2; 
@@ -240,7 +240,11 @@ export default function ConsultaModeloImprecion({ isOpen, onClose, consulta = {}
     const handlePrint = async () => {
         try {
             const html = generateHTML();
-            const { uri } = await Print.printToFileAsync({ html });
+            const { uri } = await Print.printToFileAsync({
+                html: html,
+                width: 288,   // 4 pulgadas a 72 PPI
+                height: 432,  // 6 pulgadas a 72 PPI
+            });
             if (!uri) throw new Error('No se pudo generar el archivo');
             await compartirPDF(uri);
         } catch (error) {
