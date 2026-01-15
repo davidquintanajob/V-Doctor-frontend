@@ -46,7 +46,7 @@ export default function VentaModalScreen() {
     nombre_cliente: ventaParam?.nombre_cliente || '',
     nombre_usuario: ventaParam?.nombre_usuario || '',
     nota: ventaParam?.nota || ''
-    ,exedente_redondeo: ventaParam?.exedente_redondeo != null ? String(ventaParam.exedente_redondeo) : '0'
+    , exedente_redondeo: ventaParam?.exedente_redondeo != null ? String(ventaParam.exedente_redondeo) : '0'
   }));
 
   const [isSaving, setIsSaving] = useState(false);
@@ -625,7 +625,7 @@ export default function VentaModalScreen() {
       router.back();
     } catch (error) {
       Alert.alert('Error de conexión', 'No se pudo conectar con el servidor');
-    }finally{
+    } finally {
       setIsSaving(false);
     }
   };
@@ -640,12 +640,12 @@ export default function VentaModalScreen() {
       <TopBar />
 
       {isSaving && (
-                              <Modal transparent={true} visible={isSaving} animationType="fade">
-                                  <View style={styles.loadingOverlay}>
-                                      <ActivityIndicator size="large" color="#fff" />
-                                  </View>
-                              </Modal>
-                          )}
+        <Modal transparent={true} visible={isSaving} animationType="fade">
+          <View style={styles.loadingOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        </Modal>
+      )}
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
@@ -727,6 +727,23 @@ export default function VentaModalScreen() {
                 <Image source={require('../assets/images/camera.png')} style={styles.cameraIcon} />
               </TouchableOpacity>
             </View>
+
+            {/* Ventas relacionadas: mostrar solo si vienen en los params */}
+            {ventaParam?.VentasRelacionadas && Array.isArray(ventaParam.VentasRelacionadas) && ventaParam.VentasRelacionadas.length > 0 && (
+              <View style={styles.relatedContainer}>
+                <Text style={styles.relatedTitle}>Ventas relacionadas</Text>
+                {ventaParam.VentasRelacionadas.map((item, idx) => {
+                  const name = item?.comerciable?.producto?.nombre || item?.comerciable?.servicio?.descripcion || '';
+                  const qty = item?.comerciable?.producto?.cantidad ?? item?.cantidad ?? 0;
+                  return (
+                    <View key={item?.id_venta ?? idx} style={styles.relatedItem}>
+                      <Text style={{ fontWeight: '700' }}>{name}</Text>
+                      <Text style={{ color: Colors.textSecondary }}>{`Cantidad: ${String(formatearNumero(qty))}`}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <View style={styles.infoBox}>
@@ -952,6 +969,8 @@ export default function VentaModalScreen() {
             <Text style={styles.saveButtonText}>{mode === 'crear' ? 'Crear Venta' : 'Guardar cambios'}</Text>
           </TouchableOpacity>
         )}
+
+
       </ScrollView>
       <Modal visible={totalsModalVisible} transparent animationType="fade">
         <View style={styles.loadingOverlay}>
@@ -1069,6 +1088,7 @@ export default function VentaModalScreen() {
         onClose={() => setShowScannerModal(false)}
         onCodeScanned={async (code) => {
           try {
+            setIsSaving(true)
             const raw = await AsyncStorage.getItem('@config');
             if (!raw) { Alert.alert('Error', 'No se encontró configuración'); setShowScannerModal(false); return; }
             const config = JSON.parse(raw);
@@ -1094,7 +1114,7 @@ export default function VentaModalScreen() {
               setShowScannerModal(false);
               return;
             }
-
+            
             const item = (responseData.data && responseData.data.length > 0) ? responseData.data[0] : null;
             if (!item) {
               Alert.alert('No encontrado', 'No se encontró ningún producto con ese código');
@@ -1102,14 +1122,31 @@ export default function VentaModalScreen() {
               return;
             }
 
-            // Simular la selección del item en el Autocomplete
+            // Simular la selección del item en el Autocomplete (mapeo robusto según distintas formas de respuesta)
             setSelectedComerciable(item);
             setComercialeBusqueda('');
-            const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || '';
+            const display = item.producto?.nombre || item.servicio?.descripcion || item.nombre || item.comerciable?.producto?.nombre || '';
             handleChange('comerciable_display', display);
             handleChange('comerciable_id', item.id_comerciable || item.id || null);
-            handleChange('precio_original_comerciable_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
-            handleChange('precio_original_comerciable_usd', item.precio_usd != null ? String(item.precio_usd) : (item.producto?.costo_usd ? String(item.producto.costo_usd) : ''));
+
+            const precioOrigCup = (item.precio_cup != null)
+              ? item.precio_cup
+              : (item.comerciable?.precio_cup != null)
+                ? item.comerciable.precio_cup
+                : (item.producto?.costo_cup != null)
+                  ? item.producto.costo_cup
+                  : (item.costo_cup != null ? item.costo_cup : null);
+            handleChange('precio_original_comerciable_cup', precioOrigCup != null ? String(precioOrigCup) : '');
+
+            const precioOrigUsd = (item.precio_usd != null)
+              ? item.precio_usd
+              : (item.comerciable?.precio_usd != null)
+                ? item.comerciable.precio_usd
+                : (item.producto?.costo_usd != null)
+                  ? item.producto.costo_usd
+                  : (item.costo_usd != null ? item.costo_usd : null);
+            handleChange('precio_original_comerciable_usd', precioOrigUsd != null ? String(precioOrigUsd) : '');
+
             try {
               let tipo = '';
               if (item.producto) {
@@ -1119,18 +1156,30 @@ export default function VentaModalScreen() {
                 tipo = 'servicio';
               } else if (item.tipo) {
                 tipo = item.tipo;
+              } else if (item.comerciable && item.comerciable.producto) {
+                const p = item.comerciable.producto;
+                const isMedic = Boolean(p.medicamento || p.isMedicamento || p.tipo === 'medicamento');
+                tipo = isMedic ? 'medicamento' : 'producto';
               }
               handleChange('tipo_comerciable', tipo);
             } catch (e) {
               handleChange('tipo_comerciable', '');
             }
+
             try {
-              const rawPrice = item.precio_cup != null ? Number(item.precio_cup) : (item.producto?.costo_cup ? Number(item.producto.costo_cup) : null);
+              const rawPrice = (item.precio_cup != null)
+                ? Number(item.precio_cup)
+                : (item.comerciable?.precio_cup != null)
+                  ? Number(item.comerciable.precio_cup)
+                  : (item.producto?.costo_cup != null)
+                    ? Number(item.producto.costo_cup)
+                    : (item.costo_cup != null ? Number(item.costo_cup) : null);
               const descuento = Number(ventaParam?.descuento) || 0;
               const finalPrice = (rawPrice != null && descuento > 0) ? (rawPrice * (1 - descuento / 100)) : rawPrice;
               handleChange('precio_cobrado_cup', finalPrice != null ? String(formatearNumero(finalPrice)) : '');
             } catch (e) {
-              handleChange('precio_cobrado_cup', item.precio_cup != null ? String(item.precio_cup) : (item.producto?.costo_cup ? String(item.producto.costo_cup) : ''));
+              const fallbackPrice = item.precio_cup != null ? String(item.precio_cup) : (item.costo_cup != null ? String(item.costo_cup) : '');
+              handleChange('precio_cobrado_cup', fallbackPrice);
             }
 
             setShowScannerModal(false);
@@ -1138,6 +1187,8 @@ export default function VentaModalScreen() {
             console.error('Error buscando por código:', err);
             Alert.alert('Error', 'No se pudo buscar el código');
             setShowScannerModal(false);
+          } finally{
+            setIsSaving(false)
           }
         }}
       />
@@ -1304,20 +1355,40 @@ const styles = StyleSheet.create({
     tintColor: '#fff',
   },
   loadingOverlay: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 2000,
-    },
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2000,
+  },
   summaryValue: {
     fontSize: Typography.body,
     fontWeight: 'normal',
     color: Colors.textSecondary,
+  },
+  relatedContainer: {
+    backgroundColor: '#fff',
+    padding: Spacing.m,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+    marginBottom: Spacing.m,
+  },
+  relatedTitle: {
+    fontSize: Typography.body,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: Spacing.xs,
+  },
+  relatedItem: {
+    paddingVertical: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: '#f0f0f0',
+    marginTop: Spacing.xs,
   },
   loadingOverlay: {
     flex: 1,

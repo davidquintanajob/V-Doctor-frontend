@@ -303,6 +303,34 @@ export default function HistoriaClinicaScreen() {
 
     const handleOpenPatientMenu = () => setShowPatientMenu(true);
 
+    const openConsultaModal = (consulta, modeToOpen) => {
+        try {
+            if (!consulta) {
+                router.push({ pathname: '/historia_clinicaModal', params: { mode: modeToOpen, consulta: JSON.stringify(consulta) } });
+                return;
+            }
+
+            const ventas = Array.isArray(consulta.venta) ? consulta.venta : Array.isArray(consulta.ventas) ? consulta.ventas : [];
+
+            const hasServicioComplejo = ventas.some(v => {
+                if (!v) return false;
+                if (v.servicio_complejo != null) return true;
+                // Some responses embed the servicio_complejo under comerciable.servicio
+                if (v.comerciable && v.comerciable.servicio && v.comerciable.servicio.servicio_complejo != null) return true;
+                return false;
+            });
+
+            if (hasServicioComplejo) {
+                router.push({ pathname: '/operacionModal', params: { mode: modeToOpen, consulta: JSON.stringify(consulta) } });
+            } else {
+                router.push({ pathname: '/historia_clinicaModal', params: { mode: modeToOpen, consulta: JSON.stringify(consulta) } });
+            }
+        } catch (e) {
+            console.error('Error opening consulta modal:', e);
+            router.push({ pathname: '/historia_clinicaModal', params: { mode: modeToOpen, consulta: JSON.stringify(consulta) } });
+        }
+    };
+
     return (
         <View style={styles.container}>
             <TopBar onMenuNavigate={handleMenuNavigate} />
@@ -372,7 +400,7 @@ export default function HistoriaClinicaScreen() {
                             }
 
                             return (
-                                <TouchableOpacity key={c.id ?? idx} style={styles.pacienteItem} activeOpacity={0.8} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'ver', consulta: JSON.stringify(c) } })}>
+                                <TouchableOpacity key={c.id ?? idx} style={styles.pacienteItem} activeOpacity={0.8} onPress={() => openConsultaModal(c, 'ver')}>
                                     <View style={styles.pacienteInfo}>
                                         <Text style={styles.pacienteName}>{c.motivo}</Text>
                                         <Text style={styles.pacienteText}><Text style={{ fontWeight: '600' }}>Usuario:</Text> {formatDateForDisplay(c.usuario?.nombre_natural)}</Text>
@@ -382,7 +410,7 @@ export default function HistoriaClinicaScreen() {
                                     </View>
 
                                     <View style={{ flexDirection: 'column', padding: Spacing.s }}>
-                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_azul, marginBottom: Spacing.s }]} onPress={() => router.push({ pathname: '/historia_clinicaModal', params: { mode: 'editar', consulta: JSON.stringify(c) } })}>
+                                        <TouchableOpacity style={[styles.actionButton, { backgroundColor: Colors.boton_azul, marginBottom: Spacing.s }]} onPress={() => openConsultaModal(c, 'editar')}>
                                             <Image source={require('../assets/images/editar.png')} style={{ width: 20, height: 20, tintColor: Colors.textPrimary }} resizeMode="contain" />
                                         </TouchableOpacity>
 

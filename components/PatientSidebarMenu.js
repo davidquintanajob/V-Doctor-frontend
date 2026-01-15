@@ -33,7 +33,7 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
         { name: 'Vacunas', icon: require('../assets/images/inyeccion.png'), link: 'vacunas' },
         { name: 'Antiparasitarios', icon: require('../assets/images/sangre.png'), link: 'antiparasitarios' },
         { name: 'Recordatorios', icon: require('../assets/images/despertador.png'), link: 'NoDisponible' },
-        { name: 'Operaciones', icon: require('../assets/images/operacion.png'), link: 'NoDisponible' },
+        { name: 'Operaciones', icon: require('../assets/images/operacion.png'), link: 'operaciones' },
         { name: 'Estetica y Baños', icon: require('../assets/images/bath.png'), link: 'NoDisponible' },
     ];
 
