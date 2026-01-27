@@ -21,6 +21,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
   const [userRole, setUserRole] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [calendarioCount, setCalendarioCount] = useState(0);
 
   // Definir los items con roles visibles y accesibilidad sin login
   const menuItems = [
@@ -28,7 +29,7 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Clientes', icon: require('../assets/images/customers.png'), link: 'clientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Pacientes', icon: require('../assets/images/huella.png'), link: 'pacientes', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Servicios', icon: require('../assets/images/healthcare.png'), link: 'servicioServicioComplejo', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
-    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true, enDesarrollo: true },
+    { name: 'Calendario', icon: require('../assets/images/calendar.png'), link: 'calendario', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], alwaysAccessible: true },
     { name: 'Ventas', icon: require('../assets/images/shopping-cart.png'), link: 'ventas', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"] },
     { name: 'Estética y baño', icon: require('../assets/images/perros.png'), link: 'NoDisponible', rolVisible: ["Administrador", "Médico", "Técnico", "Estilista"], enDesarrollo: true },
     { name: 'Inventario', icon: require('../assets/images/medicamento.png'), link: 'productosMedicamentos', rolVisible: ["Administrador", "Médico", "Técnico"] },
@@ -94,6 +95,26 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
     if (isOpen) {
       loadUserDataAndFilterMenu();
     }
+  }, [isOpen]);
+
+  // Cuando el sidebar se abre, además leer los recordatorios guardados localmente
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      try {
+        const raw = await AsyncStorage.getItem('@CalendarioHoy');
+        if (!raw) {
+          setCalendarioCount(0);
+          return;
+        }
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setCalendarioCount(arr.length);
+        else setCalendarioCount(0);
+      } catch (e) {
+        console.log('Error leyendo @CalendarioHoy:', e);
+        setCalendarioCount(0);
+      }
+    })();
   }, [isOpen]);
 
   React.useEffect(() => {
@@ -173,6 +194,14 @@ const SidebarMenu = ({ isOpen, onClose, onNavigate }) => {
 
   // Función para obtener el badge apropiado
   const getItemBadge = (item) => {
+    // Badge específico para Calendario si hay items guardados
+    if (item.link === 'calendario' && calendarioCount > 0) {
+      return (
+        <View style={styles.calendarioBadge}>
+          <Text style={styles.calendarioBadgeText}>{calendarioCount}</Text>
+        </View>
+      );
+    }
     if (item.enDesarrollo) {
       return (
         <View style={styles.developmentBadge}>
@@ -397,6 +426,22 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: Typography.small,
     fontWeight: 'bold',
+  },
+  calendarioBadge: {
+    position: 'absolute',
+    right: 14,
+    backgroundColor: '#E53935',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 0,
+  },
+  calendarioBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   noItemsContainer: {
     padding: Spacing.m,

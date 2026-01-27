@@ -11,6 +11,8 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 export default function HomeScreen() {
   const router = useRouter();
   const [checkingConfig, setCheckingConfig] = useState(true);
+  const [calendarioCount, setCalendarioCount] = useState(0);
+  const [calendarioItems, setCalendarioItems] = useState([]);
 
   // Datos para los botones - definir cuáles son accesibles sin login
   const buttonData = [
@@ -148,6 +150,49 @@ export default function HomeScreen() {
               console.log('No se pudo sincronizar @redondeoConfig:', e);
             }
 
+            // Consultar recordatorios del calendario para hoy y guardar en AsyncStorage
+            try {
+              const formatDateToYMD = (d) => {
+                const y = d.getFullYear();
+                const m = String(d.getMonth() + 1).padStart(2, '0');
+                const dd = String(d.getDate()).padStart(2, '0');
+                return `${y}-${m}-${dd}`;
+              };
+
+              const today = new Date();
+              const dateStr = formatDateToYMD(today);
+
+              const cleanHost = String(host).replace(/\/+$|\/+/g, '').replace(/\/$/, '');
+              let base = cleanHost;
+              // ensure no trailing slash
+              while (base.endsWith('/')) base = base.slice(0, -1);
+              const url = `${base}/calendario/filter`;
+
+              const resCal = await fetch(url, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify({ fecha_inicio: dateStr, fecha_fin: dateStr })
+              });
+
+              let items = [];
+              if (resCal.ok) {
+                const j = await resCal.json().catch(() => null);
+                items = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : (j?.rows || []));
+              }
+
+              const count = Array.isArray(items) ? items.length : 0;
+              setCalendarioItems(items);
+              setCalendarioCount(count);
+              try { await AsyncStorage.setItem('@CalendarioHoy', JSON.stringify(items || [])); } catch (e) { /* ignore */ }
+            } catch (e) {
+              console.log('Error consultando calendario hoy:', e);
+              setCalendarioItems([]);
+              setCalendarioCount(0);
+            }
+
           } catch (e) {
             console.log('No se pudo sincronizar @CambioMoneda y @redondeoConfig:', e);
           }
@@ -192,6 +237,12 @@ export default function HomeScreen() {
                   <Text style={styles.freeAccessBadgeText}>Libre</Text>
                 </View>
               )}
+                  {/* Badge de notificaciones para Calendario */}
+                  {button.link === 'calendario' && calendarioCount > 0 && (
+                    <View style={styles.calendarioBadge}>
+                      <Text style={styles.calendarioBadgeText}>{calendarioCount}</Text>
+                    </View>
+                  )}
             </TouchableOpacity>
           ))}
         </View>
@@ -347,6 +398,23 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 10,
     fontWeight: 'bold',
+  },
+  calendarioBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#E53935',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  calendarioBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   loginButton: {
     backgroundColor: Colors.primary,

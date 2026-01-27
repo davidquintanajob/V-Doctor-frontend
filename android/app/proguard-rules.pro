@@ -12,3 +12,9 @@
 -keep class com.facebook.react.turbomodule.** { *; }
 
 # Add any project specific keep options here:
+
+# Evitar errores de R8 por referencias a JNA/AWT (librerías de escritorio)
+-dontwarn com.sun.jna.**
+-dontwarn com.sun.jna.platform.**
+-dontwarn java.awt.**
+-dontwarn java.awt.event.**
