@@ -112,7 +112,7 @@ export default function CalendarioScreen() {
         fecha_inicio: start.toISOString().split('T')[0],
         fecha_fin: end.toISOString().split('T')[0]
       };
-
+      
       const base = host.replace(/\/+$/, '');
       const path = API_CALENDAR_ENDPOINT.startsWith('/') ? API_CALENDAR_ENDPOINT : `/${API_CALENDAR_ENDPOINT}`;
       const url = `${base}${path}`;
@@ -624,13 +624,21 @@ export default function CalendarioScreen() {
           current={new Date().toISOString().split('T')[0]}
           onDayPress={(day) => setSelectedDate(day.dateString)}
           onMonthChange={(month) => {
-            // `month` may have a `dateString` like 'YYYY-MM-01' or fields year/month
+            // Construir la fecha del mes usando year/month para evitar
+            // que `new Date('YYYY-MM-DD')` sea interpretado como UTC
             try {
               let monthDate;
-              if (month && month.dateString) {
-                monthDate = new Date(month.dateString);
-              } else if (month && month.year && month.month) {
+              if (month && month.year && month.month) {
                 monthDate = new Date(month.year, month.month - 1, 1);
+              } else if (month && month.dateString) {
+                const parts = String(month.dateString).split('-');
+                if (parts.length >= 2) {
+                  const y = Number(parts[0]) || new Date().getFullYear();
+                  const m = Number(parts[1]) || (new Date().getMonth() + 1);
+                  monthDate = new Date(y, m - 1, 1);
+                } else {
+                  monthDate = new Date();
+                }
               } else {
                 monthDate = new Date();
               }
@@ -707,6 +715,9 @@ export default function CalendarioScreen() {
             data={eventsByDate[selectedDate] || []}
             keyExtractor={(item) => String(item.id_calendario)}
             renderItem={renderEventItem}
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: Spacing.xl, flexGrow: 1 }}
+            showsVerticalScrollIndicator={true}
             ListEmptyComponent={() => (
               <View style={styles.emptyContainer}><Text style={styles.emptyText}>No hay eventos para esta fecha</Text></View>
             )}
@@ -932,5 +943,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     marginLeft: Spacing.s,
     fontWeight: '700'
+  }
+  ,
+  eventsListContainer: {
+    flex: 1,
+    paddingHorizontal: Spacing.m,
+    paddingTop: Spacing.s,
+    paddingBottom: Spacing.xl
+  },
+  sectionTitle: {
+    fontSize: Typography.h3,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: Spacing.s
   }
 });

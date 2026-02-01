@@ -35,7 +35,7 @@ export default function HomeScreen() {
       name: 'Calendario',
       image: require('../assets/images/calendar.png'),
       link: 'calendario',
-      requiresLogin: false, // Accesible sin login
+      requiresLogin: true, // Accesible sin login
     },
     {
       id: 4,

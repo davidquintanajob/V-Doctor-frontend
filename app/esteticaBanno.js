@@ -6,7 +6,7 @@ import PatientSidebarMenu from '../components/PatientSidebarMenu';
 import { Colors, Spacing, Typography, ColorsData } from '../variables';
 import TopBar from '../components/TopBar';
 
-export default function OperacionesScreen() {
+export default function EsteticaBannoScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
 
@@ -87,12 +87,11 @@ export default function OperacionesScreen() {
             // la respuesta puede tener "data" o ser un array
             const items = Array.isArray(json.data) ? json.data : (Array.isArray(json) ? json : (json?.rows || []));
 
-            // filtrar servicios cuyo tipo contenga 'oper' o coincida/contenga 'dental' o 'otro(s)'
+            // filtrar solo servicios cuya comerciable.servicio.servicio_complejo.tipo_servicio contenga 'oper'
             const filtered = items.filter(it => {
                 try {
-                    const tipoRaw = it?.comerciable?.servicio?.servicio_complejo?.tipo_servicio || '';
-                    const tipo = String(tipoRaw).toLowerCase();
-                    const isOperacion = tipo.includes('oper') || tipo.includes('dental') || tipo.includes('otro');
+                    const tipo = it?.comerciable?.servicio?.servicio_complejo?.tipo_servicio;
+                    const isOperacion = typeof tipo === 'string' && tipo.toLowerCase().includes('est');
                     const ventaPacienteId = it?.consulta?.paciente?.id_paciente ?? it?.consultum?.paciente?.id_paciente ?? it?.paciente?.id_paciente ?? null;
                     return isOperacion && ventaPacienteId != null && String(ventaPacienteId) === String(pacienteId);
                 } catch (e) {
@@ -328,7 +327,7 @@ export default function OperacionesScreen() {
                         />
                     </TouchableOpacity>
 
-                    <Text style={styles.sectionTitle}>Operaciones</Text>
+                    <Text style={styles.sectionTitle}>Estética y Baño</Text>
                 </View>
 
                 {/* Datos del paciente (vista compacta, solo texto) */}
@@ -342,7 +341,7 @@ export default function OperacionesScreen() {
                     </View>
                 </View>
 
-                {/* Botón ancho + Agregar Operación */}
+                {/* Botón ancho + Agregar Consulta Estética */}
                 <TouchableOpacity
                     style={styles.saveButton}
                     onPress={async () => {
@@ -355,8 +354,8 @@ export default function OperacionesScreen() {
                             const fecha = new Date().toISOString();
                             const consultaToPass = {
                                 fecha: fecha,
-                                motivo: 'Operación',
-                                anamnesis: 'El cliente solicita operación',
+                                motivo: 'Consulta Estética',
+                                anamnesis: 'El cliente solicita estética/baño',
                                 paciente: pacienteParam || pacienteData,
                                 usuario: usuario,
                             };
@@ -375,10 +374,10 @@ export default function OperacionesScreen() {
                         }
                     }}
                 >
-                    <Text style={styles.saveButtonText}>+ Agregar Operación</Text>
+                    <Text style={styles.saveButtonText}>+ Agregar Consulta Estética</Text>
                 </TouchableOpacity>
 
-                {/* Lista de operaciones (ventas filtradas) */}
+                {/* Lista de servicios de estética (ventas filtradas) */}
                 <View style={[styles.section, { minHeight: 200, marginTop: Spacing.m }]}>
                     <View style={{ marginBottom: Spacing.m }}>
                         {loadingOperaciones && (
@@ -388,7 +387,7 @@ export default function OperacionesScreen() {
                         )}
 
                         {!loadingOperaciones && operacionesList.length === 0 && (
-                            <View style={{ padding: Spacing.m }}><Text>No hay operaciones disponibles</Text></View>
+                            <View style={{ padding: Spacing.m }}><Text>No hay servicios de estética/baño disponibles</Text></View>
                         )}
 
                         {!loadingOperaciones && operacionesList.map((c, idx) => {
@@ -436,7 +435,7 @@ export default function OperacionesScreen() {
                 onClose={() => setShowPatientMenu(false)}
                 paciente={pacienteParam}
                 apiHost={apiHost}
-                selectedItem={'operaciones'}
+                selectedItem={'estetica'}
             />
         </View>
     );

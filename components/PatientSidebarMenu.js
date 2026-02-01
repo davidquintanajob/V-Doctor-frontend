@@ -34,7 +34,7 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
         { name: 'Antiparasitarios', icon: require('../assets/images/sangre.png'), link: 'antiparasitarios' },
         { name: 'Recordatorios', icon: require('../assets/images/despertador.png'), link: 'recordatoriosPacienteCalendario' },
         { name: 'Operaciones', icon: require('../assets/images/operacion.png'), link: 'operaciones' },
-        { name: 'Estetica y Baños', icon: require('../assets/images/bath.png'), link: 'NoDisponible' },
+        { name: 'Estetica y Baños', icon: require('../assets/images/perros.png'), link: 'esteticaBanno' },
     ];
 
     React.useEffect(() => {
