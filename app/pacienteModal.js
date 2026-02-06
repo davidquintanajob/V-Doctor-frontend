@@ -82,6 +82,8 @@ export default function PacienteModalScreen() {
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [pacienteChip, setPacienteChip] = useState(pacienteData.chip ? String(pacienteData.chip) : '');
     const [pacientePeso, setPacientePeso] = useState('');
+    const [originalPeso, setOriginalPeso] = useState(null);
+    const [isLoadingPeso, setIsLoadingPeso] = useState(false);
     const [descuento, setDescuento] = useState(String(pacienteData.descuento ?? ''));
     const [photoUri, setPhotoUri] = useState(null);
     const [imagenBase64, setImagenBase64] = useState(null);
@@ -407,6 +409,56 @@ export default function PacienteModalScreen() {
         })();
     }, []);
 
+    // Cargar historial de peso cuando se abre en modo 'ver' o 'editar'
+    useEffect(() => {
+        const fetchPeso = async () => {
+            try {
+                if (!(mode === 'ver' || mode === 'editar')) return;
+                if (!pacienteData?.id) return;
+                const raw = await AsyncStorage.getItem('@config');
+                if (!raw) return;
+                const cfg = JSON.parse(raw);
+                const host = cfg.api_host || cfg.apihost || cfg.apiHost;
+                const tk = cfg.token;
+                if (!host) return;
+
+                setIsLoadingPeso(true);
+
+                const url = `${host.replace(/\/+$/, '')}/historial_peso/Filter/1/1`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(tk ? { Authorization: `Bearer ${tk}` } : {}),
+                    },
+                    body: JSON.stringify({ id_paciente: pacienteData.id }),
+                });
+
+                if (!res.ok) {
+                    console.warn('[PacienteModal] Error fetching historial_peso:', res.status);
+                    setIsLoadingPeso(false);
+                    return;
+                }
+
+                const data = await res.json();
+                const first = data && data.data && data.data.length > 0 ? data.data[0] : null;
+                if (first && typeof first.peso !== 'undefined' && first.peso !== null) {
+                    setPacientePeso(String(first.peso));
+                    setOriginalPeso(String(first.peso));
+                } else {
+                    setPacientePeso('');
+                    setOriginalPeso(null);
+                }
+            } catch (err) {
+                console.error('[PacienteModal] fetchPeso error', err);
+            } finally {
+                setIsLoadingPeso(false);
+            }
+        };
+
+        fetchPeso();
+    }, [mode, pacienteData?.id]);
+
     // Handlers
     const onDateSelected = (event, selectedDate) => {
         try {
@@ -587,8 +639,71 @@ export default function PacienteModalScreen() {
             }
 
             const result = await res.json();
-            ToastAndroid.show('Paciente guardado correctamente', ToastAndroid.SHORT);
-            router.back();
+
+            // Determinar id del paciente creado/actualizado
+            let createdId = null;
+            if (mode === 'crear') {
+                createdId = result.id_paciente || result.id || (result.data && (result.data.id_paciente || result.data.id)) || (result.paciente && (result.paciente.id_paciente || result.paciente.id)) || null;
+            } else if (mode === 'editar') {
+                createdId = pacienteData.id;
+            }
+
+            // Si estamos en crear y hay un peso ingresado, crear historial_peso
+            const tryCreatePeso = async (idPaciente) => {
+                try {
+                    if (!idPaciente) return;
+                    const pesoNum = parseFloat(String(pacientePeso).replace(',', '.'));
+                    if (!pesoNum && pesoNum !== 0) return;
+
+                    const payload = {
+                        peso: Number(pesoNum.toFixed(2)),
+                        fecha: formatDateToYMD(new Date()),
+                        unidad_medida: 'kg',
+                        id_paciente: Number(idPaciente)
+                    };
+
+                    const urlPeso = `${host.replace(/\/+$/, '')}/historial_peso/Create`;
+                    const resPeso = await fetch(urlPeso, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(tk ? { Authorization: `Bearer ${tk}` } : {}),
+                        },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (!resPeso.ok) {
+                        const txt = await resPeso.text();
+                        console.warn('[PacienteModal] historial_peso/Create error', resPeso.status, txt);
+                        throw new Error(`Error creando historial de peso: ${resPeso.status}`);
+                    }
+
+                    ToastAndroid.show('Historial de peso guardado', ToastAndroid.SHORT);
+                } catch (err) {
+                    console.error('[PacienteModal] tryCreatePeso error', err);
+                    Alert.alert('Advertencia', 'No se pudo guardar el historial de peso: ' + (err.message || ''));
+                }
+            };
+
+            if (mode === 'crear') {
+                if (createdId && pacientePeso && pacientePeso !== '') {
+                    await tryCreatePeso(createdId);
+                }
+                ToastAndroid.show('Paciente guardado correctamente', ToastAndroid.SHORT);
+                router.back();
+            } else if (mode === 'editar') {
+                // Si el peso original es distinto al actual, crear un nuevo historial
+                const original = originalPeso == null ? null : String(originalPeso);
+                const current = pacientePeso == null ? null : String(pacientePeso);
+                if ((original || '') !== (current || '')) {
+                    await tryCreatePeso(createdId);
+                }
+                ToastAndroid.show('Paciente actualizado correctamente', ToastAndroid.SHORT);
+                router.back();
+            } else {
+                ToastAndroid.show('Paciente guardado correctamente', ToastAndroid.SHORT);
+                router.back();
+            }
         } catch (err) {
             console.error(err);
             Alert.alert('Error', err.message || 'No se pudo guardar el paciente');
@@ -814,8 +929,8 @@ export default function PacienteModalScreen() {
     return (
         <View style={{ flex: 1 }}>
             <TopBar onMenuNavigate={() => { }} />
-            {isSaving && (
-                <Modal transparent={true} visible={isSaving} animationType="fade">
+            {(isSaving || isLoadingPeso) && (
+                <Modal transparent={true} visible={(isSaving || isLoadingPeso)} animationType="fade">
                     <View style={styles.loadingOverlay}>
                         <ActivityIndicator size="large" color="#fff" />
                     </View>
@@ -1001,13 +1116,13 @@ export default function PacienteModalScreen() {
                                 <View style={[styles.inputGroup, styles.column]}>
                                     <Text style={styles.label}>Peso (kg)(No disp)</Text>
                                     <TextInput
-                                        style={[styles.input, styles.disabledInput]}
+                                        style={[styles.input, isView && styles.disabledInput]}
                                         value={pacientePeso}
                                         onChangeText={(text) => setPacientePeso(text.replace(/[^0-9\.]/g, ''))}
                                         placeholder="0.0"
                                         placeholderTextColor="#999"
                                         keyboardType="decimal-pad"
-                                        editable={false}
+                                        editable={!isView}
                                     />
                                 </View>
                             </View>

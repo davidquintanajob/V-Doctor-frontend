@@ -35,6 +35,7 @@ const PatientSidebarMenu = ({ isOpen, onClose, paciente, apiHost, selectedItem =
         { name: 'Recordatorios', icon: require('../assets/images/despertador.png'), link: 'recordatoriosPacienteCalendario' },
         { name: 'Operaciones', icon: require('../assets/images/operacion.png'), link: 'operaciones' },
         { name: 'Estetica y Baños', icon: require('../assets/images/perros.png'), link: 'esteticaBanno' },
+        { name: 'Historial de Peso', icon: require('../assets/images/perros.png'), link: 'historial_peso' },
     ];
 
     React.useEffect(() => {
