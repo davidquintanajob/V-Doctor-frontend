@@ -411,6 +411,7 @@ export default function VentaModalScreen() {
       } catch (e) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
+      setIsSaving(false);
       return;
     }
 
@@ -435,6 +436,7 @@ export default function VentaModalScreen() {
       } catch (e) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
+      setIsSaving(false);
       return;
     }
 
@@ -457,6 +459,7 @@ export default function VentaModalScreen() {
       } catch (e) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
+      setIsSaving(false);
       return;
     }
 
@@ -478,6 +481,7 @@ export default function VentaModalScreen() {
       } catch (e) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
+      setIsSaving(false);
       return;
     }
 
@@ -500,6 +504,7 @@ export default function VentaModalScreen() {
       } catch (e) {
         scrollRef.current?.scrollTo({ y: 0, animated: true });
       }
+      setIsSaving(false);
       return;
     }
 
@@ -525,6 +530,7 @@ export default function VentaModalScreen() {
       } catch (e) {
         scrollRef.current?.scrollTo({ y: 300, animated: true });
       }
+      setIsSaving(false);
       return;
     }
 

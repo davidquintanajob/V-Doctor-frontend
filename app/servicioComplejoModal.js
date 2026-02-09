@@ -126,18 +126,22 @@ export default function ServicioComplejoModalScreen() {
   const handleSave = async () => {
     setIsSaving(true);
     if (!servicioComplejoData.tipo_servicio) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Tipo de servicio es requerido');
       return;
     }
     if (!servicioComplejoData.descripcion) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Descripción es requerida');
       return;
     }
     if (!servicioComplejoData.precio_usd && !servicioComplejoData.precio_cup) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Precio es requerido');
       return;
     }
     if (rolesSelected.length === 0) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Se debe elegir al menos un rol autorizado');
       return;
     }

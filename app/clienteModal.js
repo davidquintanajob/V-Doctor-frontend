@@ -324,6 +324,7 @@ export default function ClienteModalScreen() {
         try {
             const rawConfig = await AsyncStorage.getItem('@config');
             if (!rawConfig) {
+                setIsSaving(false);
                 Alert.alert('Configuración requerida', 'Debes configurar la API primero');
                 router.replace('/config');
                 return;
@@ -332,6 +333,7 @@ export default function ClienteModalScreen() {
             const parsedConfig = JSON.parse(rawConfig);
             const host = parsedConfig?.api_host || parsedConfig?.apihost || parsedConfig?.apiHost;
             if (!host) {
+                setIsSaving(false);
                 Alert.alert('Configuración requerida', 'Debes configurar la API primero');
                 router.replace('/config');
                 return;
@@ -339,10 +341,12 @@ export default function ClienteModalScreen() {
 
             // Validaciones básicas para cliente
             if (!clienteData.nombre || !clienteData.nombre.trim()) {
+                setIsSaving(false);
                 Alert.alert('Error', 'El nombre del cliente es requerido');
                 return;
             }
             if (!clienteData.telefono || !clienteData.telefono.trim()) {
+                setIsSaving(false);
                 Alert.alert('Error', 'El teléfono del cliente es requerido');
                 return;
             }

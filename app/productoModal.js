@@ -227,6 +227,7 @@ export default function ProductoModalScreen() {
         try {
             const raw = await AsyncStorage.getItem('@config');
             if (!raw) {
+                setIsSaving(false);
                 Alert.alert('Configuración requerida', 'Debes configurar la API primero');
                 router.replace('/config');
                 return;
@@ -235,6 +236,7 @@ export default function ProductoModalScreen() {
             const host = config.api_host || config.apihost || config.apiHost;
             const token = config.token;
             if (!host) {
+                setIsSaving(false);
                 Alert.alert('Configuración requerida', 'Debes configurar la API primero');
                 router.replace('/config');
                 return;
@@ -242,10 +244,12 @@ export default function ProductoModalScreen() {
 
             // Basic validation
             if (!productoData.nombre || !productoData.nombre.trim()) {
+                setIsSaving(false);
                 Alert.alert('Error', 'El nombre del producto es requerido');
                 return;
             }
             if (rolesSelected.length === 0) {
+                setIsSaving(false);
                 Alert.alert('Error', 'Se debe elegir almenos un rol autorizado a comercializar el medicamento');
                 return;
             }

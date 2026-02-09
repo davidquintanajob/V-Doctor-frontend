@@ -134,14 +134,17 @@ export default function ServicioModalScreen() {
   const handleSave = async () => {
     setIsSaving(true);
     if (!servicioData.descripcion) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Descripción es requerida');
       return;
     }
     if (!servicioData.precio_usd && !servicioData.precio_cup) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Precio es requerido');
       return;
     }
     if (rolesSelected.length === 0) {
+      setIsSaving(false);
       Alert.alert('Validación', 'Se debe elegir al menos un rol autorizado');
       return;
     }
